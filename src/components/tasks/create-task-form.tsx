@@ -8,12 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 
 import { createTask } from '@/app/dashboard/actions'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -39,10 +34,7 @@ const initialState = {
 }
 
 export function CreateTaskForm() {
-  const [state, formAction, pending] = useActionState(
-    createTask,
-    initialState,
-  )
+  const [state, formAction, pending] = useActionState(createTask, initialState)
 
   const {
     register,
@@ -78,8 +70,13 @@ export function CreateTaskForm() {
 
       <CardContent className="p-5 sm:p-6 lg:p-7">
         <form
-          action={formAction}
-          onSubmit={handleSubmit(() => undefined)}
+          onSubmit={handleSubmit(async (data) => {
+            const formData = new FormData()
+            formData.append('title', data.title)
+            formData.append('description', data.description)
+
+            await formAction(formData)
+          })}
           className="space-y-6"
         >
           <div className="grid gap-6 lg:grid-cols-2">
@@ -106,10 +103,7 @@ export function CreateTaskForm() {
 
             {/* Description */}
             <div className="space-y-2">
-              <Label
-                htmlFor="description"
-                className="text-sm font-semibold"
-              >
+              <Label htmlFor="description" className="text-sm font-semibold">
                 Description
               </Label>
 
@@ -133,9 +127,7 @@ export function CreateTaskForm() {
             {state.message ? (
               <p
                 className={`text-sm ${
-                  state.success
-                    ? 'text-emerald-500'
-                    : 'text-destructive'
+                  state.success ? 'text-emerald-500' : 'text-destructive'
                 }`}
               >
                 {state.message}
