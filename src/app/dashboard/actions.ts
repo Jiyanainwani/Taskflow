@@ -130,3 +130,29 @@ export async function updateTask(
     message: 'Task deleted successfully',
   }
 }
+
+export async function toggleTask(
+  id: string,
+): Promise<{ success: boolean; message: string }> {
+  const task = await taskRepository.getTask(id)
+
+  if (!task) {
+    return {
+      success: false,
+      message: 'Task not found',
+    }
+  }
+
+  await taskRepository.updateTask(id, {
+    completed: !task.completed,
+  })
+
+  revalidatePath('/dashboard')
+
+  return {
+    success: true,
+    message: task.completed
+      ? 'Task marked as pending'
+      : 'Task marked as completed',
+  }
+}

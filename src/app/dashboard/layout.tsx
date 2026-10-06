@@ -1,5 +1,5 @@
-import { AppSidebar } from "@/components/layout/app-sidebar"
-import { SidebarProvider } from "@/components/ui/sidebar"
+import { AppSidebar } from '@/components/layout/app-sidebar'
+import { SidebarProvider } from '@/components/ui/sidebar'
 
 export default function DashboardLayout({
   children,
@@ -10,7 +10,7 @@ export default function DashboardLayout({
     <SidebarProvider>
       <AppSidebar />
 
-      <main className="flex-1">
+      <main className="min-w-0 flex-1">
         {children}
       </main>
     </SidebarProvider>

@@ -1,17 +1,22 @@
 'use client'
 
-import { zodResolver } from '@hookform/resolvers/zod'
+import { Plus } from 'lucide-react'
 import { useActionState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
+import { zodResolver } from '@hookform/resolvers/zod'
 
 import { createTask } from '@/app/dashboard/actions'
+import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 
 const formSchema = z.object({
   title: z
@@ -52,74 +57,103 @@ export function CreateTaskForm() {
   })
 
   return (
-    <Card className="border-border/60 shadow-sm">
-      <CardHeader>
-        <CardTitle className="text-lg">Create a new task</CardTitle>
+    <Card className="overflow-hidden border-primary/30 bg-card shadow-lg">
+      <CardHeader className="border-b border-border/50 pb-5">
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/15 text-primary">
+            <Plus className="h-6 w-6" />
+          </div>
+
+          <div>
+            <CardTitle className="text-xl sm:text-2xl">
+              Create a new task
+            </CardTitle>
+
+            <p className="mt-1 text-sm text-muted-foreground sm:text-base">
+              Add a task to your TaskFlow workspace.
+            </p>
+          </div>
+        </div>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="p-5 sm:p-6 lg:p-7">
         <form
           action={formAction}
           onSubmit={handleSubmit(() => undefined)}
-          className="space-y-4"
+          className="space-y-6"
         >
-          <div>
-            <label
-              htmlFor="title"
-              className="mb-1 block text-sm font-medium"
-            >
-              Title
-            </label>
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Title */}
+            <div className="space-y-2">
+              <Label htmlFor="title" className="text-sm font-semibold">
+                Title <span className="text-destructive">*</span>
+              </Label>
 
-            <input
-              id="title"
-              type="text"
-              placeholder="Enter task title"
-              {...register('title')}
-              className="w-full rounded-md border bg-background px-3 py-2"
-            />
+              <Input
+                id="title"
+                type="text"
+                placeholder="Enter task title..."
+                {...register('title')}
+                className="h-12 bg-background/60 text-base"
+              />
 
-            {errors.title && (
-              <p className="mt-1 text-sm text-destructive">
-                {errors.title.message}
-              </p>
-            )}
+              {errors.title && (
+                <p className="text-sm text-destructive">
+                  {errors.title.message}
+                </p>
+              )}
+            </div>
+
+            {/* Description */}
+            <div className="space-y-2">
+              <Label
+                htmlFor="description"
+                className="text-sm font-semibold"
+              >
+                Description
+              </Label>
+
+              <Textarea
+                id="description"
+                placeholder="Enter task description (optional)..."
+                {...register('description')}
+                rows={3}
+                className="min-h-12 resize-none bg-background/60 text-base"
+              />
+
+              {errors.description && (
+                <p className="text-sm text-destructive">
+                  {errors.description.message}
+                </p>
+              )}
+            </div>
           </div>
 
-          <div>
-            <label
-              htmlFor="description"
-              className="mb-1 block text-sm font-medium"
-            >
-              Description
-            </label>
-
-            <textarea
-              id="description"
-              placeholder="Enter task description"
-              {...register('description')}
-              className="w-full rounded-md border bg-background px-3 py-2"
-              rows={3}
-            />
-
-            {errors.description && (
-              <p className="mt-1 text-sm text-destructive">
-                {errors.description.message}
+          <div className="flex items-center justify-between gap-4">
+            {state.message ? (
+              <p
+                className={`text-sm ${
+                  state.success
+                    ? 'text-emerald-500'
+                    : 'text-destructive'
+                }`}
+              >
+                {state.message}
               </p>
+            ) : (
+              <span />
             )}
+
+            <Button
+              type="submit"
+              disabled={pending}
+              size="lg"
+              className="gap-2 px-6 shadow-md"
+            >
+              <Plus className="h-5 w-5" />
+              {pending ? 'Creating...' : 'Create Task'}
+            </Button>
           </div>
-
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-md bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
-          >
-            {pending ? 'Creating...' : 'Create Task'}
-          </button>
-
-          {state.message && (
-            <p className="text-sm">{state.message}</p>
-          )}
         </form>
       </CardContent>
     </Card>

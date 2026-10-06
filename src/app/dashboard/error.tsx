@@ -26,5 +26,5 @@ export default function ErrorPage({
         Try again
       </Button>
     </main>
-  )
+  )   
 }
