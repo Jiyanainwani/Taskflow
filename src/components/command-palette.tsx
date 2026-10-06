@@ -48,9 +48,7 @@ export function CommandPalette() {
             Dashboard
           </CommandItem>
 
-          <CommandItem onSelect={() => navigate('/tasks')}>
-            Tasks
-          </CommandItem>
+         
         </CommandGroup>
       </CommandList>
     </CommandDialog>
