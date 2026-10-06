@@ -78,10 +78,15 @@ export function CreateTaskForm() {
 
       <CardContent className="p-5 sm:p-6 lg:p-7">
         <form
-          action={formAction}
-          onSubmit={handleSubmit(() => undefined)}
-          className="space-y-6"
-        >
+  onSubmit={handleSubmit(async (data) => {
+    const formData = new FormData()
+    formData.append('title', data.title)
+    formData.append('description', data.description)
+
+    await formAction(formData)
+  })}
+  className="space-y-6"
+>
           <div className="grid gap-6 lg:grid-cols-2">
             {/* Title */}
             <div className="space-y-2">
