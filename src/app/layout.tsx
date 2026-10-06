@@ -5,8 +5,12 @@ import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'TaskFlow',
-  description: 'Task management application',
+  title: {
+    default: 'TaskFlow',
+    template: '%s | TaskFlow',
+  },
+  description:
+    'TaskFlow is a simple task management application for organizing and tracking your work.',
 }
 
 export default function RootLayout({
