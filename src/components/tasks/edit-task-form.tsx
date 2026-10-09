@@ -25,6 +25,7 @@ type EditTaskFormProps = {
 const initialState = {
   success: false,
   message: '',
+  successCount: 0,
 }
 
 export function EditTaskForm({ task }: EditTaskFormProps) {
