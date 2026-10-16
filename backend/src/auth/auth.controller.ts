@@ -17,10 +17,14 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
+import { Get, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { ConfigService } from '@nestjs/config';
+
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService,private readonly configService: ConfigService,) {}
 
   @Post('signup')
   @ApiOperation({ summary: 'Register a new user' })
@@ -114,4 +118,34 @@ export class AuthController {
 
     return result;
   }
+  
+@Get('google')
+@UseGuards(AuthGuard('google'))
+googleAuth() {}
+
+@Get('google/callback')
+@UseGuards(AuthGuard('google'))
+async googleCallback(
+  @Req() request: Request & {
+    user: { googleId: string; email: string; name: string };
+  },
+  @Res() response: Response,
+) {
+  const result = await this.authService.googleLogin(request.user);
+
+  response.cookie('refresh_token', result.refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/api/auth',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+
+  const frontendUrl = this.configService.getOrThrow<string>('FRONTEND_URL');
+
+  return response.redirect(
+    `${frontendUrl}/auth/callback#accessToken=${encodeURIComponent(result.accessToken)}`,
+  );
+}
+
 }

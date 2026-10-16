@@ -22,6 +22,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { TeamRolesGuard } from './guards/team-roles.guard.js';
 
 interface AuthenticatedRequest extends Request {
   user: { id: string };
@@ -60,6 +61,7 @@ export class TeamsController {
   }
 
   @Post(':id/members')
+  @UseGuards(TeamRolesGuard)
   @ApiOperation({ summary: 'Add a member to a team' })
   @ApiResponse({ status: 201, description: 'Member added successfully' })
   @ApiResponse({ status: 400, description: 'Invalid member data' })
@@ -75,6 +77,7 @@ export class TeamsController {
   }
 
   @Patch(':id/members/:memberId')
+  @UseGuards(TeamRolesGuard)
   @ApiOperation({ summary: 'Update a team member role' })
   @ApiResponse({ status: 200, description: 'Member role updated successfully' })
   @ApiResponse({ status: 400, description: 'Invalid member ID or role' })
@@ -96,6 +99,7 @@ export class TeamsController {
   }
 
   @Delete(':id/members/:memberId')
+  @UseGuards(TeamRolesGuard)
   @ApiOperation({ summary: 'Remove a member from a team' })
   @ApiResponse({ status: 200, description: 'Member removed successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -110,6 +114,7 @@ export class TeamsController {
   }
 
   @Delete(':id')
+  @UseGuards(TeamRolesGuard)
   @ApiOperation({ summary: 'Delete a team' })
   @ApiResponse({ status: 200, description: 'Team deleted successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })

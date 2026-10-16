@@ -4,6 +4,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TeamsController } from './teams.controller.js';
 import { TeamsService } from './teams.service.js';
 import { AccessTokenGuard } from '../auth/guards/access-token.guards.js';
+import { TeamRolesGuard } from './guards/team-roles.guard.js';
 import { TeamRole } from './schemas/team.schema.js';
 import { InviteMemberDto } from './dto/invite-member.dto.js';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto.js';
@@ -38,6 +39,8 @@ describe('TeamsController', () => {
       ],
     })
       .overrideGuard(AccessTokenGuard)
+      .useValue({ canActivate: vi.fn(() => true) })
+      .overrideGuard(TeamRolesGuard)
       .useValue({ canActivate: vi.fn(() => true) })
       .compile();
 
@@ -78,9 +81,10 @@ describe('TeamsController', () => {
 
   it('should invite a member', async () => {
     const dto: InviteMemberDto = {
-  userId: '507f1f77bcf86cd799439014',
-  role: TeamRole.MEMBER,
-};
+      userId: '507f1f77bcf86cd799439014',
+      role: TeamRole.MEMBER,
+    };
+
     teamsService.inviteMember.mockResolvedValue({});
 
     await controller.inviteMember(req as any, 'team-id', dto);
@@ -93,9 +97,11 @@ describe('TeamsController', () => {
   });
 
   it('should update a member role', async () => {
-const dto: UpdateMemberRoleDto = {
-  role: TeamRole.VIEWER,
-};({});
+    const dto: UpdateMemberRoleDto = {
+      role: TeamRole.VIEWER,
+    };
+
+    teamsService.updateMemberRole.mockResolvedValue({});
 
     await controller.updateMemberRole(
       req as any,

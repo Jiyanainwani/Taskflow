@@ -1,4 +1,3 @@
-
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { JwtModule } from '@nestjs/jwt';
@@ -8,6 +7,7 @@ import { TeamsController } from './teams.controller.js';
 import { TeamsService } from './teams.service.js';
 import { Team, TeamSchema } from './schemas/team.schema.js';
 import { User, UserSchema } from '../users/schemas/user.schema.js';
+import { TeamRolesGuard } from './guards/team-roles.guard.js';
 
 @Module({
   imports: [
@@ -18,12 +18,12 @@ import { User, UserSchema } from '../users/schemas/user.schema.js';
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_ACCESS_SECRET'),
+        secret: configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
         signOptions: { expiresIn: '15m' },
       }),
     }),
   ],
   controllers: [TeamsController],
-  providers: [TeamsService],
+  providers: [TeamsService, TeamRolesGuard],
 })
 export class TeamsModule {}

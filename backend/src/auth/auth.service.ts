@@ -9,6 +9,7 @@ import { Model } from 'mongoose';
 import { RefreshSession } from './schemas/refresh-session.schema.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
+import { User } from '../users/schemas/user.schema.js';
 @Injectable()
 export class AuthService {
   constructor(
@@ -18,6 +19,8 @@ export class AuthService {
 
     @InjectModel(RefreshSession.name)
     private readonly refreshSessionModel: Model<RefreshSession>,
+    @InjectModel(User.name)
+    private readonly userModel: Model<User>,
   ) {}
 
   async signup(signupDto: SignupDto) {
@@ -124,7 +127,7 @@ export class AuthService {
           expiresAt: { $gt: new Date() },
         },
         { $set: { revokedAt: new Date() } },
-        { new: false },
+        { returnDocument: 'before' },
       )
       .exec();
 
@@ -203,4 +206,49 @@ export class AuthService {
 
     return { message: 'Logged out successfully' };
   }
+
+  
+async googleLogin(profile: {
+  googleId: string;
+  email: string;
+  name: string;
+}) {
+  let user = await this.userModel
+    .findOne({ googleId: profile.googleId })
+    .exec();
+
+  if (!user) {
+    const emailAccount = await this.userModel
+      .findOne({ email: profile.email })
+      .exec();
+
+    if (emailAccount) {
+      throw new UnauthorizedException(
+        'An account with this email already exists. Log in with your password first.',
+      );
+    }
+
+    user = await this.userModel.create({
+      googleId: profile.googleId,
+      email: profile.email,
+      name: profile.name,
+      passwordHash: await argon2.hash(randomUUID()),
+    });
+  }
+
+  const userId = user._id.toString();
+
+  const accessToken = await this.jwtService.signAsync(
+    { sub: userId, email: user.email },
+    {
+      secret: this.configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
+      expiresIn: '15m',
+    },
+  );
+
+  const refreshToken = await this.createRefreshSession(userId);
+
+  return { accessToken, refreshToken };
+}
+
 }

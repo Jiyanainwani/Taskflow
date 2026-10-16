@@ -137,8 +137,24 @@ it('should rotate a valid refresh token', async () => {
     refreshToken: 'new-refresh-token',
   });
 
-  expect(refreshSessionModel.findOneAndUpdate).toHaveBeenCalled();
-  expect(refreshSessionModel.create).toHaveBeenCalled();
+  expect(refreshSessionModel.findOneAndUpdate).toHaveBeenCalledWith(
+    {
+      userId: payload.sub,
+      tokenHash: createHash('sha256').update(refreshToken).digest('hex'),
+      revokedAt: null,
+      expiresAt: { $gt: expect.any(Date) },
+    },
+    { $set: { revokedAt: expect.any(Date) } },
+    { returnDocument: 'before' },
+  );
+
+  expect(refreshSessionModel.create).toHaveBeenCalledWith({
+    userId: payload.sub,
+    tokenHash: createHash('sha256')
+      .update('new-refresh-token')
+      .digest('hex'),
+    expiresAt: expect.any(Date),
+  });
 });
 
 it('should reject an invalid refresh token', async () => {
@@ -152,7 +168,7 @@ it('should reject an invalid refresh token', async () => {
   expect(refreshSessionModel.create).not.toHaveBeenCalled();
 });
 
-it('should reject a reused refresh token', async () => {
+it('should revoke active sessions when a refresh token is reused', async () => {
   jwtService.verifyAsync.mockResolvedValue(payload);
 
   refreshSessionModel.findOneAndUpdate.mockReturnValue({
@@ -169,9 +185,34 @@ it('should reject a reused refresh token', async () => {
     UnauthorizedException,
   );
 
-  expect(refreshSessionModel.updateMany).toHaveBeenCalled();
+  expect(refreshSessionModel.updateMany).toHaveBeenCalledWith(
+    {
+      userId: payload.sub,
+      revokedAt: null,
+      expiresAt: { $gt: expect.any(Date) },
+    },
+    { $set: { revokedAt: expect.any(Date) } },
+  );
+
   expect(refreshSessionModel.create).not.toHaveBeenCalled();
 });
 
+it('should reject a refresh token with no matching session', async () => {
+  jwtService.verifyAsync.mockResolvedValue(payload);
 
+  refreshSessionModel.findOneAndUpdate.mockReturnValue({
+    exec: vi.fn().mockResolvedValue(null),
+  });
+
+  refreshSessionModel.findOne.mockReturnValue({
+    exec: vi.fn().mockResolvedValue(null),
+  });
+
+  await expect(service.refresh(refreshToken)).rejects.toThrow(
+    UnauthorizedException,
+  );
+
+  expect(refreshSessionModel.create).not.toHaveBeenCalled();
+  expect(refreshSessionModel.updateMany).not.toHaveBeenCalled();
+});
 });

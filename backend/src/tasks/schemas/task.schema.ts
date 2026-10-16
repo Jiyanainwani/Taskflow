@@ -18,10 +18,10 @@ export enum TaskPriority {
 
 @Schema({ timestamps: true })
 export class Task {
-  @Prop({ required: true, trim: true, maxlength: 200 })
+  @Prop({ type:String,required: true, trim: true, maxlength: 200 })
   title: string;
 
-  @Prop({ trim: true, maxlength: 2000, default: '' })
+  @Prop({type:String, trim: true, maxlength: 2000, default: '' })
   description: string;
 
   @Prop({

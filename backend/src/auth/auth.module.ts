@@ -10,14 +10,17 @@ import {
   RefreshSessionSchema,
 } from './schemas/refresh-session.schema.js';
 import { AccessTokenGuard } from './guards/access-token.guards.js';
+import { User, UserSchema } from '../users/schemas/user.schema.js';
+import { GoogleStrategy } from './google.strategy.js';
 
 @Module({
   imports: [
      UsersModule,
     ConfigModule,
     MongooseModule.forFeature([
-      { name: RefreshSession.name, schema: RefreshSessionSchema },
-    ]),
+  { name: RefreshSession.name, schema: RefreshSessionSchema },
+  { name: User.name, schema: UserSchema },
+]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -29,7 +32,7 @@ import { AccessTokenGuard } from './guards/access-token.guards.js';
       }),
     }),
   ],
-  providers: [AuthService,AccessTokenGuard],
+  providers: [AuthService,AccessTokenGuard,GoogleStrategy],
   controllers: [AuthController],
 })
 export class AuthModule {}

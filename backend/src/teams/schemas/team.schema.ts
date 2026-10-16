@@ -28,10 +28,10 @@ export const TeamMemberSchema = SchemaFactory.createForClass(TeamMember);
 
 @Schema({ timestamps: true })
 export class Team {
-  @Prop({ required: true, trim: true, maxlength: 100 })
+  @Prop({ type:String,required: true, trim: true, maxlength: 100 })
   name: string;
 
-  @Prop({ trim: true, maxlength: 1000, default: '' })
+  @Prop({type:String, trim: true, maxlength: 1000, default: '' })
   description: string;
 
   @Prop({
