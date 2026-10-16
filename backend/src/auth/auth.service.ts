@@ -50,12 +50,20 @@ export class AuthService {
   }
   async login(loginDto: LoginDto) {
     const user = await this.validateUser(loginDto);
-    const accessToken = await this.jwtService.signAsync({
-      sub: user.id,
-      email: user.email,
-    });
+
+    const accessToken = await this.jwtService.signAsync(
+      {
+        sub: user.id,
+        email: user.email,
+      },
+      {
+        secret: this.configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
+        expiresIn: '15m',
+      },
+    );
 
     const refreshToken = await this.createRefreshSession(user.id);
+
     return {
       message: 'Login successful',
       accessToken,
@@ -89,79 +97,110 @@ export class AuthService {
     return refreshToken;
   }
 
-  
-async refresh(refreshToken: string) {
-  let payload: { sub: string; jti: string; type: string };
+  async refresh(refreshToken: string) {
+    let payload: { sub: string; jti: string; type: string };
 
-  try {
-    payload = await this.jwtService.verifyAsync(refreshToken, {
-      secret: this.configService.getOrThrow<string>(
-        'JWT_REFRESH_SECRET',
-      ),
-    });
-  } catch {
-    throw new UnauthorizedException('Invalid refresh token');
-  }
+    try {
+      payload = await this.jwtService.verifyAsync(refreshToken, {
+        secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
 
-  if (
-    payload.type !== 'refresh' ||
-    !payload.sub ||
-    !payload.jti
-  ) {
-    throw new UnauthorizedException('Invalid refresh token');
-  }
+    if (payload.type !== 'refresh' || !payload.sub || !payload.jti) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
 
-  const tokenHash = this.hashToken(refreshToken);
+    const tokenHash = this.hashToken(refreshToken);
 
-  // Atomically revoke the old session so it cannot be rotated twice.
-  const session = await this.refreshSessionModel
-    .findOneAndUpdate(
-      {
-        userId: payload.sub,
-        tokenHash,
-        revokedAt: null,
-        expiresAt: { $gt: new Date() },
-      },
-      { $set: { revokedAt: new Date() } },
-      { new: false },
-    )
-    .exec();
-
-  if (!session) {
-    // A previously revoked token may be a reuse attempt.
-    const previousSession = await this.refreshSessionModel
-      .findOne({ userId: payload.sub, tokenHash })
-      .exec();
-
-    if (previousSession?.revokedAt) {
-      // Revoke all currently active sessions for this user.
-      await this.refreshSessionModel.updateMany(
+    // Atomically revoke the old session so it cannot be rotated twice.
+    const session = await this.refreshSessionModel
+      .findOneAndUpdate(
         {
           userId: payload.sub,
+          tokenHash,
           revokedAt: null,
           expiresAt: { $gt: new Date() },
         },
         { $set: { revokedAt: new Date() } },
-      ).exec();
-    }
+        { new: false },
+      )
+      .exec();
 
-    throw new UnauthorizedException(
-      'Refresh token is invalid, expired, or reused',
+    if (!session) {
+      // A previously revoked token may be a reuse attempt.
+      const previousSession = await this.refreshSessionModel
+        .findOne({ userId: payload.sub, tokenHash })
+        .exec();
+
+      if (previousSession?.revokedAt) {
+        // Revoke all currently active sessions for this user.
+        await this.refreshSessionModel
+          .updateMany(
+            {
+              userId: payload.sub,
+              revokedAt: null,
+              expiresAt: { $gt: new Date() },
+            },
+            { $set: { revokedAt: new Date() } },
+          )
+          .exec();
+      }
+
+      throw new UnauthorizedException(
+        'Refresh token is invalid, expired, or reused',
+      );
+    }
+    // Issue replacement tokens only after the old session is revoked.
+    const accessToken = await this.jwtService.signAsync(
+      {
+        sub: payload.sub,
+      },
+      {
+        secret: this.configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
+        expiresIn: '15m',
+      },
     );
+    const newRefreshToken = await this.createRefreshSession(payload.sub);
+
+    return {
+      message: 'Tokens refreshed successfully',
+      accessToken,
+      refreshToken: newRefreshToken,
+    };
   }
 
-  // Issue replacement tokens only after the old session is revoked.
-  const accessToken = await this.jwtService.signAsync({
-    sub: payload.sub,
-  });
+  async logout(refreshToken: string | undefined) {
+    if (refreshToken) {
+      try {
+        const payload = await this.jwtService.verifyAsync<{
+          sub: string;
+          jti: string;
+          type: string;
+        }>(refreshToken, {
+          secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
+        });
 
-  const newRefreshToken = await this.createRefreshSession(payload.sub);
+        if (payload.type === 'refresh' && payload.sub && payload.jti) {
+          await this.refreshSessionModel
+            .updateOne(
+              {
+                userId: payload.sub,
+                tokenHash: this.hashToken(refreshToken),
+                revokedAt: null,
+              },
+              {
+                $set: { revokedAt: new Date() },
+              },
+            )
+            .exec();
+        }
+      } catch {
+        // Invalid or expired tokens do not prevent logout.
+      }
+    }
 
-  return {
-    message: 'Tokens refreshed successfully',
-    accessToken,
-    refreshToken: newRefreshToken,
-  };
-}
-
+    return { message: 'Logged out successfully' };
+  }
 }

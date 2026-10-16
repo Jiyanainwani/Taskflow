@@ -9,6 +9,7 @@ import {
   RefreshSession,
   RefreshSessionSchema,
 } from './schemas/refresh-session.schema.js';
+import { AccessTokenGuard } from './guards/access-token.guards.js';
 
 @Module({
   imports: [
@@ -28,7 +29,7 @@ import {
       }),
     }),
   ],
-  providers: [AuthService],
+  providers: [AuthService,AccessTokenGuard],
   controllers: [AuthController],
 })
 export class AuthModule {}
