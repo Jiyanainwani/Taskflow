@@ -34,6 +34,7 @@ const updateTaskSchema = z.object({
 export type CreateTaskState = {
   success: boolean
   message: string
+  successCount: number
 }
 
 export async function createTask(
@@ -49,6 +50,7 @@ export async function createTask(
     return {
       success: false,
       message: result.error.issues[0]?.message ?? 'Invalid task',
+      successCount: _previousState.successCount,
     }
   }
 
@@ -56,11 +58,12 @@ export async function createTask(
     title: result.data.title,
     description: result.data.description,
   })
- revalidatePath('/dashboard')
+  revalidatePath('/dashboard')
 
   return {
     success: true,
     message: 'Task created successfully',
+    successCount: _previousState.successCount + 1,
   }
 }
 
@@ -79,6 +82,7 @@ export async function updateTask(
     return {
       success: false,
       message: result.error.issues[0]?.message ?? 'Invalid task',
+      successCount: _previousState.successCount,
     }
   }
 
@@ -92,6 +96,7 @@ export async function updateTask(
     return {
       success: false,
       message: 'Task not found',
+      successCount: _previousState.successCount,
     }
   }
 
@@ -100,9 +105,10 @@ export async function updateTask(
   return {
     success: true,
     message: 'Task updated successfully',
+    successCount: _previousState.successCount,
   }
 }
- export async function deleteTask(
+export async function deleteTask(
   id: string,
 ): Promise<{ success: boolean; message: string }> {
   const result = z.string().min(1).safeParse(id)

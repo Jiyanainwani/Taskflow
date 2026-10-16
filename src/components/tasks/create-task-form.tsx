@@ -1,7 +1,8 @@
+
 'use client'
 
 import { Plus } from 'lucide-react'
-import { useActionState } from 'react'
+import { useActionState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -31,11 +32,12 @@ const formSchema = z.object({
     .max(500, 'Description must be 500 characters or less'),
 })
 
-type FormData = z.infer<typeof formSchema>
+type CreateTaskFormValues = z.infer<typeof formSchema>
 
 const initialState = {
   success: false,
   message: '',
+  successCount: 0,
 }
 
 export function CreateTaskForm() {
@@ -47,14 +49,21 @@ export function CreateTaskForm() {
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors },
-  } = useForm<FormData>({
+  } = useForm<CreateTaskFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       title: '',
       description: '',
     },
   })
+
+  useEffect(() => {
+    if (state.success && state.successCount > 0) {
+      reset()
+    }
+  }, [state.successCount, state.success, reset])
 
   return (
     <Card className="overflow-hidden border-primary/30 bg-card shadow-lg">
@@ -78,17 +87,16 @@ export function CreateTaskForm() {
 
       <CardContent className="p-5 sm:p-6 lg:p-7">
         <form
-  onSubmit={handleSubmit(async (data) => {
-    const formData = new FormData()
-    formData.append('title', data.title)
-    formData.append('description', data.description)
+          onSubmit={handleSubmit(async (data) => {
+            const formData = new FormData()
+            formData.append('title', data.title)
+            formData.append('description', data.description)
 
-    await formAction(formData)
-  })}
-  className="space-y-6"
->
+            await formAction(formData)
+          })}
+          className="space-y-6"
+        >
           <div className="grid gap-6 lg:grid-cols-2">
-            {/* Title */}
             <div className="space-y-2">
               <Label htmlFor="title" className="text-sm font-semibold">
                 Title <span className="text-destructive">*</span>
@@ -100,6 +108,7 @@ export function CreateTaskForm() {
                 placeholder="Enter task title..."
                 {...register('title')}
                 className="h-12 bg-background/60 text-base"
+                aria-invalid={!!errors.title}
               />
 
               {errors.title && (
@@ -109,7 +118,6 @@ export function CreateTaskForm() {
               )}
             </div>
 
-            {/* Description */}
             <div className="space-y-2">
               <Label
                 htmlFor="description"
@@ -124,6 +132,7 @@ export function CreateTaskForm() {
                 {...register('description')}
                 rows={3}
                 className="min-h-12 resize-none bg-background/60 text-base"
+                aria-invalid={!!errors.description}
               />
 
               {errors.description && (
@@ -137,6 +146,7 @@ export function CreateTaskForm() {
           <div className="flex items-center justify-between gap-4">
             {state.message ? (
               <p
+                role="status"
                 className={`text-sm ${
                   state.success
                     ? 'text-emerald-500'
