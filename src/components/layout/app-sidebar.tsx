@@ -1,9 +1,10 @@
+
 import {
   CheckSquare,
   LayoutDashboard,
-  
 } from 'lucide-react'
 import Link from 'next/link'
+import { LogoutButton } from '@/components/auth/logout-button'
 
 import {
   Sidebar,
@@ -22,7 +23,6 @@ const items = [
     url: '/dashboard',
     icon: LayoutDashboard,
   },
- 
 ]
 
 export function AppSidebar() {
@@ -30,7 +30,6 @@ export function AppSidebar() {
     <Sidebar className="border-r border-border/60">
       <SidebarContent className="bg-card/50">
         <SidebarGroup className="px-3 py-5">
-          {/* Logo */}
           <SidebarGroupLabel className="mb-6 px-3 text-xl font-bold tracking-tight text-foreground">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md">
@@ -61,6 +60,7 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        <div className="mt-auto p-4"><LogoutButton /></div>
       </SidebarContent>
     </Sidebar>
   )
