@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 
-import { ThemeProvider } from '@/components/theme-provider'
+import { QueryProvider } from '@/components/query-provider'
+import { ThemeProvider } from '@/components/ui/theme-provider'
+import { Toaster } from '@/components/ui/sonner'
 
 import './globals.css'
 
@@ -21,7 +23,12 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <QueryProvider>
+          <ThemeProvider>
+            {children}
+            <Toaster position="top-right" />
+          </ThemeProvider>
+        </QueryProvider>
       </body>
     </html>
   )
