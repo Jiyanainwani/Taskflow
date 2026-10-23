@@ -1,12 +1,12 @@
+
 'use client'
 
 import { Plus } from 'lucide-react'
-import { useActionState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useEffect, useMemo, useState } from 'react'
 
-import { createTask } from '@/app/dashboard/actions'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -17,43 +17,75 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { useCreateTask } from '@/lib/task-queries'
+import { useTeams } from '@/lib/workspace-queries'
+import { getCurrentUserId } from '@/lib/auth'
+import type { ApiTeam } from '@/lib/teams-api'
+
+function canCreateInTeam(team: ApiTeam, userId: string | null) {
+  if (!userId) return false
+  const ownerId = typeof team.owner === 'string' ? team.owner : team.owner._id
+  if (ownerId === userId) return true
+  return team.members.some((member) => {
+    const memberId = typeof member.user === 'string' ? member.user : member.user._id
+    return memberId === userId && member.role === 'member'
+  })
+}
 
 const formSchema = z.object({
   title: z
     .string()
     .trim()
     .min(1, 'Title is required')
-    .max(100, 'Title must be 100 characters or less'),
+    .max(200, 'Title must be 200 characters or less'),
 
   description: z
     .string()
     .trim()
-    .max(500, 'Description must be 500 characters or less'),
+    .max(2000, 'Description must be 2000 characters or less'),
+  teamId: z.string(),
 })
 
-type FormData = z.infer<typeof formSchema>
-
-const initialState = {
-  success: false,
-  message: '',
-}
+type CreateTaskFormValues = z.infer<typeof formSchema>
 
 export function CreateTaskForm() {
-  const [state, formAction, pending] = useActionState(
-    createTask,
-    initialState,
+  const mutation = useCreateTask()
+  const teamsQuery = useTeams()
+  const [userId, setUserId] = useState<string | null>(null)
+  useEffect(() => {
+    const id = getCurrentUserId()
+    if (id) window.requestAnimationFrame(() => setUserId(id))
+  }, [])
+  const manageableTeams = useMemo(
+    () => teamsQuery.data?.filter((team) => canCreateInTeam(team, userId)) ?? [],
+    [teamsQuery.data, userId],
   )
 
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors },
-  } = useForm<FormData>({
+  } = useForm<CreateTaskFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       title: '',
       description: '',
+      teamId: '',
     },
+  })
+
+  const onSubmit = handleSubmit(async (data) => {
+    try {
+      const { teamId, ...taskData } = data
+      await mutation.mutateAsync({
+        ...taskData,
+        ...(teamId ? { teamId } : {}),
+      })
+      reset()
+    } catch {
+      // The mutation error is displayed below the form.
+    }
   })
 
   return (
@@ -77,18 +109,8 @@ export function CreateTaskForm() {
       </CardHeader>
 
       <CardContent className="p-5 sm:p-6 lg:p-7">
-       <form
-  onSubmit={handleSubmit(async (data) => {
-    const formData = new FormData()
-    formData.append('title', data.title)
-    formData.append('description', data.description)
-
-    await formAction(formData)
-  })}
-  className="space-y-6"
->
+        <form onSubmit={onSubmit} className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-2">
-            {/* Title */}
             <div className="space-y-2">
               <Label htmlFor="title" className="text-sm font-semibold">
                 Title <span className="text-destructive">*</span>
@@ -100,6 +122,7 @@ export function CreateTaskForm() {
                 placeholder="Enter task title..."
                 {...register('title')}
                 className="h-12 bg-background/60 text-base"
+                aria-invalid={!!errors.title}
               />
 
               {errors.title && (
@@ -109,7 +132,6 @@ export function CreateTaskForm() {
               )}
             </div>
 
-            {/* Description */}
             <div className="space-y-2">
               <Label
                 htmlFor="description"
@@ -124,6 +146,7 @@ export function CreateTaskForm() {
                 {...register('description')}
                 rows={3}
                 className="min-h-12 resize-none bg-background/60 text-base"
+                aria-invalid={!!errors.description}
               />
 
               {errors.description && (
@@ -134,29 +157,47 @@ export function CreateTaskForm() {
             </div>
           </div>
 
+          <div className="max-w-md space-y-2">
+            <Label htmlFor="task-team">Save task to</Label>
+            <select
+              id="task-team"
+              {...register('teamId')}
+              className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+            >
+              <option value="">Personal tasks</option>
+              {manageableTeams.map((team) => (
+                <option key={team._id} value={team._id}>Team: {team.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Team members can edit shared tasks. Viewers can read them only.
+            </p>
+          </div>
+
           <div className="flex items-center justify-between gap-4">
-            {state.message ? (
+            {mutation.isError ? (
               <p
-                className={`text-sm ${
-                  state.success
-                    ? 'text-emerald-500'
-                    : 'text-destructive'
-                }`}
+                role="alert"
+                className="text-sm text-destructive"
               >
-                {state.message}
+                {mutation.error.message}
               </p>
             ) : (
-              <span />
+              mutation.isSuccess ? (
+                <p role="status" className="text-sm text-emerald-500">
+                  Task created successfully.
+                </p>
+              ) : <span />
             )}
 
             <Button
               type="submit"
-              disabled={pending}
+              disabled={mutation.isPending}
               size="lg"
               className="gap-2 px-6 shadow-md"
             >
               <Plus className="h-5 w-5" />
-              {pending ? 'Creating...' : 'Create Task'}
+              {mutation.isPending ? 'Creating...' : 'Create Task'}
             </Button>
           </div>
         </form>

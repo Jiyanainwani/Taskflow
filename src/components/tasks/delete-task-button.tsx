@@ -1,9 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-
-import { deleteTask } from '@/app/dashboard/actions'
 import { Button } from '@/components/ui/button'
+import { useDeleteTask } from '@/lib/task-queries'
 
 type DeleteTaskButtonProps = {
   taskId: string
@@ -12,9 +10,9 @@ type DeleteTaskButtonProps = {
 export function DeleteTaskButton({
   taskId,
 }: DeleteTaskButtonProps) {
-  const [pending, setPending] = useState(false)
+  const mutation = useDeleteTask()
 
-  async function handleDelete() {
+  function handleDelete() {
     const confirmed = window.confirm(
       'Are you sure you want to delete this task?',
     )
@@ -23,21 +21,24 @@ export function DeleteTaskButton({
       return
     }
 
-    setPending(true)
-
-    await deleteTask(taskId)
-
-    setPending(false)
+    mutation.mutate(taskId)
   }
 
   return (
-    <Button
-      variant="destructive"
-      size="sm"
-      onClick={handleDelete}
-      disabled={pending}
-    >
-      {pending ? 'Deleting...' : 'Delete'}
-    </Button>
+    <div className="flex flex-col items-end gap-1">
+      <Button
+        variant="destructive"
+        size="sm"
+        onClick={handleDelete}
+        disabled={mutation.isPending}
+      >
+        {mutation.isPending ? 'Deleting...' : 'Delete'}
+      </Button>
+      {mutation.isError && (
+        <span role="alert" className="max-w-40 text-right text-xs text-destructive">
+          {mutation.error.message}
+        </span>
+      )}
+    </div>
   )
 }
