@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { refreshAccessToken } from '@/lib/auth'
+import { hasValidAccessToken, refreshAccessToken } from '@/lib/auth'
 
 export function DashboardAuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -10,6 +10,14 @@ export function DashboardAuthGuard({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     let active = true
+
+    // Login already issued a short-lived access token. Use it for this session
+    // instead of immediately depending on a cross-site refresh cookie.
+    if (hasValidAccessToken()) {
+      setReady(true)
+      return () => { active = false }
+    }
+
     refreshAccessToken()
       .then(() => { if (active) setReady(true) })
       .catch(() => { if (active) router.replace('/auth/login') })

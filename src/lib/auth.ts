@@ -44,6 +44,20 @@ export function getAccessToken() {
     : sessionStorage.getItem(ACCESS_TOKEN_KEY)
 }
 
+export function hasValidAccessToken() {
+  const payloadPart = getAccessToken()?.split('.')[1]
+  if (!payloadPart) return false
+
+  try {
+    const base64 = payloadPart.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')
+    const payload = JSON.parse(window.atob(padded)) as { exp?: unknown }
+    return typeof payload.exp === 'number' && payload.exp * 1000 > Date.now()
+  } catch {
+    return false
+  }
+}
+
 export function getCurrentUserId() {
   const token = getAccessToken()
   const payloadPart = token?.split('.')[1]
