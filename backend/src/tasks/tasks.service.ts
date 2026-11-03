@@ -13,6 +13,16 @@ import { CreateTaskDto } from './dto/create-task.dto.js';
 import { UpdateTaskDto } from './dto/update-task.dto.js';
 import { QueryTasksDto } from './dto/query-tasks.dto.js';
 import { RedisTaskListCache } from '../cache/redis-task-list.cache.js';
+import { TaskActivityAction } from './schemas/task-activity.schema.js';
+import { TaskActivityService } from './task-activity.service.js';
+import { RealtimePublisherService } from '../realtime/realtime-publisher.service.js';
+import type { RealtimeEventType } from '../realtime/realtime.events.js';
+import { TaskReminderQueueService } from '../reminders/task-reminder-queue.service.js';
+import {
+  TaskAttachment,
+  TaskAttachmentDocument,
+} from './schemas/task-attachment.schema.js';
+import { S3StorageService } from '../storage/s3-storage.service.js';
 
 @Injectable()
 export class TasksService {
@@ -22,6 +32,12 @@ export class TasksService {
     @InjectModel(Team.name)
     private readonly teamModel: Model<TeamDocument>,
     private readonly taskListCache: RedisTaskListCache,
+    private readonly taskActivityService: TaskActivityService,
+    private readonly realtimePublisher: RealtimePublisherService,
+    private readonly reminderQueue: TaskReminderQueueService,
+    @InjectModel(TaskAttachment.name)
+    private readonly attachmentModel: Model<TaskAttachmentDocument>,
+    private readonly storage: S3StorageService,
   ) {}
 
   async create(
@@ -49,6 +65,14 @@ export class TasksService {
 
     const savedTask = await task.save();
     await this.taskListCache.invalidate();
+    await this.taskActivityService.record(
+      savedTask._id,
+      userId,
+      TaskActivityAction.CREATED,
+      'Created this task',
+    );
+    await this.publishTaskEvent('task.created', savedTask);
+    await this.reminderQueue.syncTask(savedTask);
     return savedTask;
   }
 
@@ -97,8 +121,7 @@ export class TasksService {
     const page = {
       data: tasks,
       hasNextPage,
-      nextCursor:
-        hasNextPage && lastTask ? this.encodeCursor(lastTask) : null,
+      nextCursor: hasNextPage && lastTask ? this.encodeCursor(lastTask) : null,
     };
 
     await this.taskListCache.set(userId, query, page);
@@ -108,10 +131,7 @@ export class TasksService {
   private async getAccessibleTeamIds(userId: Types.ObjectId) {
     const teams = await this.teamModel
       .find({
-        $or: [
-          { owner: userId },
-          { 'members.user': userId },
-        ],
+        $or: [{ owner: userId }, { 'members.user': userId }],
       })
       .select('_id')
       .exec();
@@ -128,10 +148,7 @@ export class TasksService {
     const team = await this.teamModel
       .findOne({
         _id: new Types.ObjectId(teamId),
-        $or: [
-          { owner: userObjectId },
-          { 'members.user': userObjectId },
-        ],
+        $or: [{ owner: userObjectId }, { 'members.user': userObjectId }],
       })
       .exec();
 
@@ -154,7 +171,7 @@ export class TasksService {
     }
   }
 
-  private async assertCanWriteTask(userId: string, task: TaskDocument) {
+  async assertCanWriteTask(userId: string, task: TaskDocument) {
     if (task.teamId) {
       const role = await this.getTeamRole(userId, task.teamId.toString());
       this.assertCanWriteTeamTask(role);
@@ -244,7 +261,9 @@ export class TasksService {
       ...(updateTaskDto.description !== undefined && {
         description: updateTaskDto.description,
       }),
-      ...(updateTaskDto.status !== undefined && { status: updateTaskDto.status }),
+      ...(updateTaskDto.status !== undefined && {
+        status: updateTaskDto.status,
+      }),
       ...(updateTaskDto.priority !== undefined && {
         priority: updateTaskDto.priority,
       }),
@@ -266,6 +285,22 @@ export class TasksService {
 
     if (!updatedTask) throw new NotFoundException('Task not found');
     await this.taskListCache.invalidate();
+
+    const statusChanged =
+      updateTaskDto.status !== undefined && task.status !== updatedTask.status;
+    const changedFields = Object.keys(updateData).join(', ');
+    await this.taskActivityService.record(
+      task._id,
+      userId,
+      statusChanged
+        ? TaskActivityAction.STATUS_CHANGED
+        : TaskActivityAction.UPDATED,
+      statusChanged
+        ? `Moved from ${task.status} to ${updatedTask.status}`
+        : `Updated ${changedFields}`,
+    );
+    await this.publishTaskEvent('task.updated', updatedTask);
+    await this.reminderQueue.syncTask(updatedTask, task.dueDate);
     return updatedTask;
   }
 
@@ -276,11 +311,33 @@ export class TasksService {
     const access = task.teamId
       ? { teamId: task.teamId }
       : { owner: new Types.ObjectId(userId) };
-    await this.taskModel
-      .deleteOne({ _id: task._id, ...access })
+    const attachments = await this.attachmentModel
+      .find({ taskId: task._id })
       .exec();
+    for (const attachment of attachments) {
+      await this.storage.deleteObject(attachment.objectKey);
+    }
+    await this.attachmentModel.deleteMany({ taskId: task._id }).exec();
+    await this.taskModel.deleteOne({ _id: task._id, ...access }).exec();
+    await this.taskActivityService.deleteForTask(task._id);
     await this.taskListCache.invalidate();
+    await this.reminderQueue.cancelTask(task._id.toString(), true);
+    await this.publishTaskEvent('task.deleted', task);
 
     return { message: 'Task deleted successfully' };
+  }
+
+  private async publishTaskEvent(
+    type: RealtimeEventType,
+    task: Pick<TaskDocument, '_id' | 'owner' | 'teamId'>,
+  ) {
+    await this.realtimePublisher.publishTaskEvent(
+      {
+        type,
+        taskId: task._id.toString(),
+        occurredAt: new Date().toISOString(),
+      },
+      task,
+    );
   }
 }

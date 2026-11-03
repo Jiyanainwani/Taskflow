@@ -1,4 +1,5 @@
-const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api').replace(/\/$/, '')
+import { AUTH_API_URL } from '@/lib/api-url'
+
 const ACCESS_TOKEN_KEY = 'taskflow.accessToken'
 
 type AuthResponse = {
@@ -10,7 +11,7 @@ type AuthResponse = {
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   let response: Response
   try {
-    response = await fetch(`${API_URL}${path}`, {
+    response = await fetch(`${AUTH_API_URL}${path}`, {
       ...init,
       credentials: 'include',
       headers: { 'Content-Type': 'application/json', ...init.headers },

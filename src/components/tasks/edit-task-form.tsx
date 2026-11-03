@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useUpdateTask } from '@/lib/task-queries'
 import type { Task } from '@/types/task'
+import { localDateTimeInputToIso, toLocalDateTimeInput } from '@/lib/local-date-time'
 
 type EditTaskFormProps = {
   task: Task
@@ -29,6 +30,7 @@ const editTaskSchema = z.object({
   title: z.string().trim().min(1, 'Title is required').max(200),
   description: z.string().trim().max(2000),
   completed: z.boolean(),
+  dueDate: z.string(),
 })
 
 type EditTaskValues = z.infer<typeof editTaskSchema>
@@ -46,6 +48,7 @@ export function EditTaskForm({ task }: EditTaskFormProps) {
       title: task.title,
       description: task.description ?? '',
       completed: task.completed,
+      dueDate: toLocalDateTimeInput(task.dueDate),
     },
   })
 
@@ -56,6 +59,7 @@ export function EditTaskForm({ task }: EditTaskFormProps) {
         input: {
           title: values.title,
           description: values.description,
+          dueDate: localDateTimeInputToIso(values.dueDate),
           status: values.completed
             ? 'done'
             : task.status === 'in-progress'
@@ -115,6 +119,19 @@ export function EditTaskForm({ task }: EditTaskFormProps) {
                 {errors.description.message}
               </p>
             )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor={`due-date-${task.id}`}>Due date and time (optional)</Label>
+            <Input
+              id={`due-date-${task.id}`}
+              type="datetime-local"
+              step={60}
+              {...register('dueDate')}
+            />
+            <p className="text-xs text-muted-foreground">
+              The task owner receives a reminder when it is due.
+            </p>
           </div>
 
           <div className="flex items-center gap-2">

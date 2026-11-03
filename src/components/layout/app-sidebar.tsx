@@ -1,12 +1,18 @@
 
 'use client'
 
-import { CheckSquare, Command, FolderKanban, LayoutDashboard, UsersRound } from 'lucide-react'
+import { BellRing, CheckSquare, Command, FolderKanban, LayoutDashboard, UsersRound } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { LogoutButton } from '@/components/auth/logout-button'
 import { Button } from '@/components/ui/button'
 import { CommandShortcut } from '@/components/ui/command'
+import {
+  checkReminderAdminAccess,
+  reminderAdminAccessQueryKey,
+} from '@/lib/reminder-admin-api'
+import { getCurrentUserId } from '@/lib/auth'
 
 import {
   Sidebar,
@@ -37,8 +43,30 @@ const items = [
   },
 ]
 
+const adminItems = [
+  {
+    title: 'Failed reminders',
+    url: '/dashboard/admin/reminders',
+    icon: BellRing,
+  },
+]
+
 export function AppSidebar() {
   const pathname = usePathname()
+  const userId = getCurrentUserId()
+  const reminderAdminAccess = useQuery({
+    queryKey: reminderAdminAccessQueryKey(userId),
+    queryFn: checkReminderAdminAccess,
+    retry: false,
+    staleTime: 0,
+    refetchOnMount: 'always',
+  })
+  const visibleItems =
+    reminderAdminAccess.isSuccess &&
+    reminderAdminAccess.data?.isAdmin &&
+    !reminderAdminAccess.isFetching
+      ? [...items, ...adminItems]
+      : items
 
   return (
     <Sidebar className="border-r border-border/60">
@@ -56,7 +84,7 @@ export function AppSidebar() {
 
           <SidebarGroupContent>
             <SidebarMenu className="gap-2">
-              {items.map((item) => {
+              {visibleItems.map((item) => {
                 const Icon = item.icon
 
                 return (

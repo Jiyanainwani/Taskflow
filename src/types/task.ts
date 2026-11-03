@@ -9,6 +9,7 @@ export type Task = {
   owner?: string
   teamId?: string | null
   priority?: 'low' | 'medium' | 'high'
+  dueDate?: string | null
 }
 
 export type CreateTaskInput = {

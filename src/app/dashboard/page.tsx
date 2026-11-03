@@ -27,6 +27,7 @@ function toDashboardTask(apiTask: ApiTask): Task {
     owner: apiTask.owner,
     teamId: apiTask.teamId,
     priority: apiTask.priority,
+    dueDate: apiTask.dueDate,
   }
 }
 

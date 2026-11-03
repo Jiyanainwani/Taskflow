@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { login, signup } from '@/lib/auth'
+import { AUTH_API_URL } from '@/lib/api-url'
 
 const schema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(100, 'Name must be 100 characters or less').optional(),
@@ -79,7 +80,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
           </form>
           {mode === 'login' && <>
             <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />OR<span className="h-px flex-1 bg-border" /></div>
-            <Button type="button" variant="outline" className="w-full" onClick={() => { window.location.assign(`${(process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api').replace(/\/$/, '')}/auth/google`) }}>Continue with Google</Button>
+            <Button type="button" variant="outline" className="w-full" onClick={() => { window.location.assign(`${AUTH_API_URL}/auth/google`) }}>Continue with Google</Button>
           </>}
           <p className="mt-6 text-center text-sm text-muted-foreground">{mode === 'login' ? "Don't have an account? " : 'Already have an account? '}<Link className="font-medium text-foreground underline-offset-4 hover:underline" href={mode === 'login' ? '/auth/signup' : '/auth/login'}>{mode === 'login' ? 'Sign up' : 'Sign in'}</Link></p>
         </CardContent>

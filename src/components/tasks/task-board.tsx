@@ -5,6 +5,7 @@ import { GripVertical } from 'lucide-react'
 
 import { DeleteTaskButton } from '@/components/tasks/delete-task-button'
 import { EditTaskForm } from '@/components/tasks/edit-task-form'
+import { TaskCollaborationDialog } from '@/components/tasks/task-collaboration-dialog'
 import { ToggleTaskButton } from '@/components/tasks/toggle-task-button'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -172,6 +173,7 @@ export function TaskBoard({
                             <h4 className={`font-medium ${task.completed ? 'text-muted-foreground line-through' : ''}`}>{task.title}</h4>
                             {sharedTeam && <p className="mt-1 text-xs font-medium text-primary">{sharedTeam}{!editable && ' · Read only'}</p>}
                             {task.description && <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{task.description}</p>}
+                            {task.dueDate && <p className="mt-2 text-xs text-muted-foreground">Due {new Date(task.dueDate).toLocaleString()}</p>}
                           </div>
                           <span className="shrink-0 rounded-full bg-muted px-2 py-1 text-[11px] font-medium capitalize text-muted-foreground">{task.priority ?? 'medium'}</span>
                         </div>
@@ -197,6 +199,11 @@ export function TaskBoard({
                           ) : (
                             <span className="text-xs text-muted-foreground">Read only</span>
                           )}
+                          <TaskCollaborationDialog
+                            taskId={task.id}
+                            taskTitle={task.title}
+                            canComment={editable}
+                          />
                         </div>
                       </CardContent>
                     </Card>

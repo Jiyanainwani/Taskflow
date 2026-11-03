@@ -3,13 +3,15 @@ import { getModelToken } from '@nestjs/mongoose';
 import { NotFoundException } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { TasksService } from './tasks.service.js';
-import {
-  Task,
-  TaskPriority,
-  TaskStatus,
-} from './schemas/task.schema.js';
+import { Task, TaskPriority, TaskStatus } from './schemas/task.schema.js';
 import { Team } from '../teams/schemas/team.schema.js';
 import { RedisTaskListCache } from '../cache/redis-task-list.cache.js';
+import { TaskActivityService } from './task-activity.service.js';
+import { TaskActivityAction } from './schemas/task-activity.schema.js';
+import { RealtimePublisherService } from '../realtime/realtime-publisher.service.js';
+import { TaskReminderQueueService } from '../reminders/task-reminder-queue.service.js';
+import { TaskAttachment } from './schemas/task-attachment.schema.js';
+import { S3StorageService } from '../storage/s3-storage.service.js';
 describe('TasksService', () => {
   let service: TasksService;
   let module: TestingModule;
@@ -19,12 +21,26 @@ describe('TasksService', () => {
     findOneAndUpdate: ReturnType<typeof vi.fn>;
     deleteOne: ReturnType<typeof vi.fn>;
   };
-  let teamModel: { find: ReturnType<typeof vi.fn>; findOne: ReturnType<typeof vi.fn> };
+  let teamModel: {
+    find: ReturnType<typeof vi.fn>;
+    findOne: ReturnType<typeof vi.fn>;
+  };
   let taskListCache: {
     get: ReturnType<typeof vi.fn>;
     set: ReturnType<typeof vi.fn>;
     invalidate: ReturnType<typeof vi.fn>;
   };
+  let taskActivityService: {
+    record: ReturnType<typeof vi.fn>;
+    deleteForTask: ReturnType<typeof vi.fn>;
+  };
+  let realtimePublisher: { publishTaskEvent: ReturnType<typeof vi.fn> };
+  let reminderQueue: {
+    syncTask: ReturnType<typeof vi.fn>;
+    cancelTask: ReturnType<typeof vi.fn>;
+  };
+  let attachmentModel: { find: ReturnType<typeof vi.fn>; deleteMany: ReturnType<typeof vi.fn> };
+  let storage: { deleteObject: ReturnType<typeof vi.fn> };
 
   const userId = '507f1f77bcf86cd799439013';
   const taskId = '507f1f77bcf86cd799439011';
@@ -38,7 +54,9 @@ describe('TasksService', () => {
     };
     teamModel = {
       find: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({ exec: vi.fn().mockResolvedValue([]) }),
+        select: vi
+          .fn()
+          .mockReturnValue({ exec: vi.fn().mockResolvedValue([]) }),
       }),
       findOne: vi.fn(),
     };
@@ -47,12 +65,29 @@ describe('TasksService', () => {
       set: vi.fn().mockResolvedValue(undefined),
       invalidate: vi.fn().mockResolvedValue(undefined),
     };
+    taskActivityService = {
+      record: vi.fn().mockResolvedValue(undefined),
+      deleteForTask: vi.fn().mockResolvedValue(undefined),
+    };
+    realtimePublisher = {
+      publishTaskEvent: vi.fn().mockResolvedValue(undefined),
+    };
+    reminderQueue = {
+      syncTask: vi.fn().mockResolvedValue(undefined),
+      cancelTask: vi.fn().mockResolvedValue(undefined),
+    };
+    attachmentModel = {
+      find: vi.fn().mockReturnValue({ exec: vi.fn().mockResolvedValue([]) }),
+      deleteMany: vi.fn().mockReturnValue({ exec: vi.fn().mockResolvedValue(undefined) }),
+    };
+    storage = { deleteObject: vi.fn().mockResolvedValue(undefined) };
 
     const mockConstructor = vi.fn(function (
       this: Record<string, unknown>,
       data,
     ) {
       Object.assign(this, data);
+      this._id = new Types.ObjectId(taskId);
       this.save = vi.fn().mockResolvedValue(this);
     });
 
@@ -73,6 +108,14 @@ describe('TasksService', () => {
           provide: RedisTaskListCache,
           useValue: taskListCache,
         },
+        {
+          provide: TaskActivityService,
+          useValue: taskActivityService,
+        },
+        { provide: RealtimePublisherService, useValue: realtimePublisher },
+        { provide: TaskReminderQueueService, useValue: reminderQueue },
+        { provide: getModelToken(TaskAttachment.name), useValue: attachmentModel },
+        { provide: S3StorageService, useValue: storage },
       ],
     }).compile();
 
@@ -102,6 +145,17 @@ describe('TasksService', () => {
       expect(result.owner).toEqual(new Types.ObjectId(userId));
       expect(result.save).toBeDefined();
       expect(taskListCache.invalidate).toHaveBeenCalledOnce();
+      expect(taskActivityService.record).toHaveBeenCalledWith(
+        new Types.ObjectId(taskId),
+        userId,
+        TaskActivityAction.CREATED,
+        'Created this task',
+      );
+      expect(realtimePublisher.publishTaskEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'task.created', taskId }),
+        expect.objectContaining({ owner: new Types.ObjectId(userId) }),
+      );
+      expect(reminderQueue.syncTask).toHaveBeenCalledWith(result);
     });
 
     it('should default description and dueDate when omitted', async () => {
@@ -112,7 +166,6 @@ describe('TasksService', () => {
       expect(result.description).toBe('');
       expect(result.dueDate).toBeNull();
     });
-
   });
 
   describe('findAll', () => {
@@ -162,14 +215,24 @@ describe('TasksService', () => {
       expect(result.data).toEqual([]);
       expect(result.hasNextPage).toBe(false);
       expect(result.nextCursor).toBeNull();
-      expect(taskListCache.set).toHaveBeenCalledWith(userId, { limit: 10 }, result);
+      expect(taskListCache.set).toHaveBeenCalledWith(
+        userId,
+        { limit: 10 },
+        result,
+      );
     });
 
     it('should return the cached page without querying MongoDB', async () => {
-      const cachedPage = { data: [{ title: 'Cached task' }], hasNextPage: false, nextCursor: null };
+      const cachedPage = {
+        data: [{ title: 'Cached task' }],
+        hasNextPage: false,
+        nextCursor: null,
+      };
       taskListCache.get.mockResolvedValue(cachedPage);
 
-      await expect(service.findAll(userId, { limit: 10 })).resolves.toBe(cachedPage);
+      await expect(service.findAll(userId, { limit: 10 })).resolves.toBe(
+        cachedPage,
+      );
       expect(taskModel.find).not.toHaveBeenCalled();
       expect(teamModel.find).not.toHaveBeenCalled();
     });
@@ -215,7 +278,11 @@ describe('TasksService', () => {
 
   describe('findOne', () => {
     it('should return a task owned by the user', async () => {
-      const task = { _id: taskId, owner: new Types.ObjectId(userId), title: 'My task' };
+      const task = {
+        _id: taskId,
+        owner: new Types.ObjectId(userId),
+        title: 'My task',
+      };
       taskModel.findOne.mockReturnValue({
         exec: vi.fn().mockResolvedValue(task),
       });
@@ -250,7 +317,10 @@ describe('TasksService', () => {
   describe('update', () => {
     it('should update a task owned by the user', async () => {
       taskModel.findOne.mockReturnValue({
-        exec: vi.fn().mockResolvedValue({ _id: new Types.ObjectId(taskId), owner: new Types.ObjectId(userId) }),
+        exec: vi.fn().mockResolvedValue({
+          _id: new Types.ObjectId(taskId),
+          owner: new Types.ObjectId(userId),
+        }),
       });
 
       const updatedTask = { _id: taskId, title: 'Updated task' };
@@ -262,6 +332,17 @@ describe('TasksService', () => {
         service.update(userId, taskId, { title: 'Updated task' }),
       ).resolves.toEqual(updatedTask);
       expect(taskListCache.invalidate).toHaveBeenCalledOnce();
+      expect(taskActivityService.record).toHaveBeenCalledWith(
+        new Types.ObjectId(taskId),
+        userId,
+        TaskActivityAction.UPDATED,
+        'Updated title',
+      );
+      expect(realtimePublisher.publishTaskEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'task.updated', taskId }),
+        updatedTask,
+      );
+      expect(reminderQueue.syncTask).toHaveBeenCalledWith(updatedTask, undefined);
 
       expect(taskModel.findOneAndUpdate).toHaveBeenCalledWith(
         {
@@ -270,6 +351,31 @@ describe('TasksService', () => {
         },
         { $set: { title: 'Updated task' } },
         { new: true, runValidators: true },
+      );
+    });
+
+    it('should record a status-change activity event', async () => {
+      const task = {
+        _id: new Types.ObjectId(taskId),
+        owner: new Types.ObjectId(userId),
+        teamId: null,
+        status: TaskStatus.TODO,
+      };
+      taskModel.findOne.mockReturnValue({
+        exec: vi.fn().mockResolvedValue(task),
+      });
+      const updatedTask = { ...task, status: TaskStatus.DONE };
+      taskModel.findOneAndUpdate.mockReturnValue({
+        exec: vi.fn().mockResolvedValue(updatedTask),
+      });
+
+      await service.update(userId, taskId, { status: TaskStatus.DONE });
+
+      expect(taskActivityService.record).toHaveBeenCalledWith(
+        task._id,
+        userId,
+        TaskActivityAction.STATUS_CHANGED,
+        'Moved from todo to done',
       );
     });
 
@@ -284,13 +390,15 @@ describe('TasksService', () => {
 
       expect(taskModel.findOneAndUpdate).not.toHaveBeenCalled();
     });
-
   });
 
   describe('remove', () => {
     it('should delete a task owned by the user', async () => {
       taskModel.findOne.mockReturnValue({
-        exec: vi.fn().mockResolvedValue({ _id: new Types.ObjectId(taskId), owner: new Types.ObjectId(userId) }),
+        exec: vi.fn().mockResolvedValue({
+          _id: new Types.ObjectId(taskId),
+          owner: new Types.ObjectId(userId),
+        }),
       });
       taskModel.deleteOne.mockReturnValue({
         exec: vi.fn().mockResolvedValue({ deletedCount: 1 }),
@@ -300,6 +408,12 @@ describe('TasksService', () => {
         message: 'Task deleted successfully',
       });
       expect(taskListCache.invalidate).toHaveBeenCalledOnce();
+      expect(taskActivityService.deleteForTask).toHaveBeenCalledOnce();
+      expect(reminderQueue.cancelTask).toHaveBeenCalledWith(taskId, true);
+      expect(realtimePublisher.publishTaskEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'task.deleted', taskId }),
+        expect.objectContaining({ _id: new Types.ObjectId(taskId) }),
+      );
 
       expect(taskModel.deleteOne).toHaveBeenCalledWith({
         _id: new Types.ObjectId(taskId),
