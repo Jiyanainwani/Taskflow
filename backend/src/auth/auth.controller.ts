@@ -54,7 +54,7 @@ export class AuthController {
     response.cookie('refresh_token', result.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
       path: '/api/auth',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
@@ -88,7 +88,7 @@ export class AuthController {
     response.cookie('refresh_token', result.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
       path: '/api/auth',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
@@ -115,7 +115,7 @@ export class AuthController {
     response.clearCookie('refresh_token', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
       path: '/api/auth',
     });
 
@@ -139,7 +139,7 @@ async googleCallback(
   response.cookie('refresh_token', result.refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     path: '/api/auth',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
