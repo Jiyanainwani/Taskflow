@@ -21,5 +21,5 @@ export function LogoutButton() {
     }
   }
 
-  return <Button variant="ghost" className="w-full justify-start" disabled={pending} onClick={handleLogout}><LogOut aria-hidden="true" />{pending ? 'Signing out…' : 'Sign out'}</Button>
+  return <Button variant="ghost" className="w-full justify-start text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-foreground" disabled={pending} onClick={handleLogout}><LogOut aria-hidden="true" />{pending ? 'Signing out…' : 'Sign out'}</Button>
 }

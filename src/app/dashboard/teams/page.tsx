@@ -24,8 +24,15 @@ function roleFor(team: ApiTeam, userId: string | null): TeamRole | null {
 
 function RolePill({ role }: { role: TeamRole | null }) {
   const label = role ? role[0].toUpperCase() + role.slice(1) : 'Role unavailable'
+  const roleClass = role === 'owner'
+    ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300'
+    : role === 'member'
+      ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+      : role === 'viewer'
+        ? 'bg-slate-500/10 text-slate-600 dark:text-slate-300'
+        : 'bg-muted text-muted-foreground'
   return (
-    <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${roleClass}`}>
       {label}
     </span>
   )
@@ -55,26 +62,26 @@ export default function TeamsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto w-full max-w-6xl space-y-8">
+    <main className="min-h-screen px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
+      <div className="mx-auto w-full max-w-6xl space-y-9">
         <header>
-          <p className="text-sm font-medium text-primary">Workspace</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">Teams</h1>
-          <p className="mt-2 max-w-2xl text-muted-foreground">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Collaboration</p>
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Teams</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
             View the teams you belong to and manage your team workspace.
           </p>
         </header>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Plus className="size-5 text-primary" /> Create a team
+        <Card className="gap-0 overflow-hidden border-transparent py-0 shadow-sm ring-1 ring-border/70">
+          <CardHeader className="w-full border-b border-border/60 bg-gradient-to-r from-primary/[0.09] via-primary/[0.035] to-transparent py-4">
+            <CardTitle className="flex items-center gap-2 text-base font-semibold tracking-tight">
+              <Plus className="size-4 text-primary" /> Create a team
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleCreate} className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
-              <div className="space-y-2">
-                <Label htmlFor="team-name">Team name</Label>
+          <CardContent className="w-full p-5 sm:p-6">
+            <form onSubmit={handleCreate} className="grid gap-x-5 gap-y-4 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.4fr)_auto] md:items-end">
+              <div className="flex min-w-0 flex-col gap-2">
+                <Label htmlFor="team-name" className="text-xs font-semibold">Team name</Label>
                 <Input
                   id="team-name"
                   value={name}
@@ -82,10 +89,11 @@ export default function TeamsPage() {
                   maxLength={100}
                   required
                   placeholder="e.g. Product team"
+                  className="h-11 bg-background shadow-sm"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="team-description">Description</Label>
+              <div className="flex min-w-0 flex-col gap-2">
+                <Label htmlFor="team-description" className="text-xs font-semibold">Description</Label>
                 <Textarea
                   id="team-description"
                   value={description}
@@ -93,9 +101,10 @@ export default function TeamsPage() {
                   maxLength={1000}
                   rows={1}
                   placeholder="What does this team work on?"
+                  className="h-11 min-h-11 resize-y bg-background py-3 shadow-sm"
                 />
               </div>
-              <Button type="submit" disabled={createMutation.isPending || !name.trim()}>
+              <Button type="submit" className="h-11 w-full rounded-lg px-5 shadow-sm shadow-primary/15 md:w-auto" disabled={createMutation.isPending || !name.trim()}>
                 {createMutation.isPending ? 'Creating…' : 'Create team'}
               </Button>
             </form>
@@ -140,11 +149,11 @@ export default function TeamsPage() {
               {teamsQuery.data.map((team) => {
                 const role = roleFor(team, userId)
                 return (
-                  <Card key={team._id} className="transition-shadow hover:shadow-md">
+                  <Card key={team._id} className="border-transparent shadow-sm ring-1 ring-border/70 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
                     <CardContent className="flex h-full flex-col gap-4 p-5">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <h3 className="truncate text-lg font-semibold">{team.name}</h3>
+                          <h3 className="truncate text-base font-semibold tracking-tight">{team.name}</h3>
                           <p className="mt-1 line-clamp-2 min-h-10 text-sm text-muted-foreground">
                             {team.description || 'No description added.'}
                           </p>

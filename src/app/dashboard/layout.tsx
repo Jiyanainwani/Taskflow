@@ -3,6 +3,7 @@ import { SidebarProvider } from '@/components/ui/sidebar'
 import { DashboardAuthGuard } from '@/components/auth/dashboard-auth-guard'
 import { CommandPalette } from '@/components/command-palette'
 import { TaskRealtimeProvider } from '@/components/realtime/task-realtime-provider'
+import { DashboardTopbar } from '@/components/layout/dashboard-topbar'
 
 export default function DashboardLayout({
   children,
@@ -16,7 +17,10 @@ export default function DashboardLayout({
         <SidebarProvider>
           <AppSidebar />
 
-          <main className="min-w-0 flex-1">{children}</main>
+          <div className="min-w-0 flex-1">
+            <DashboardTopbar />
+            {children}
+          </div>
         </SidebarProvider>
       </TaskRealtimeProvider>
     </DashboardAuthGuard>
