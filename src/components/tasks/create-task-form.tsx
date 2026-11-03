@@ -21,6 +21,7 @@ import { useCreateTask } from '@/lib/task-queries'
 import { useTeams } from '@/lib/workspace-queries'
 import { getCurrentUserId } from '@/lib/auth'
 import type { ApiTeam } from '@/lib/teams-api'
+import { localDateTimeInputToIso } from '@/lib/local-date-time'
 
 function canCreateInTeam(team: ApiTeam, userId: string | null) {
   if (!userId) return false
@@ -44,6 +45,7 @@ const formSchema = z.object({
     .trim()
     .max(2000, 'Description must be 2000 characters or less'),
   teamId: z.string(),
+  dueDate: z.string(),
 })
 
 type CreateTaskFormValues = z.infer<typeof formSchema>
@@ -72,14 +74,16 @@ export function CreateTaskForm() {
       title: '',
       description: '',
       teamId: '',
+      dueDate: '',
     },
   })
 
   const onSubmit = handleSubmit(async (data) => {
     try {
-      const { teamId, ...taskData } = data
+      const { teamId, dueDate, ...taskData } = data
       await mutation.mutateAsync({
         ...taskData,
+        dueDate: localDateTimeInputToIso(dueDate),
         ...(teamId ? { teamId } : {}),
       })
       reset()
@@ -171,6 +175,19 @@ export function CreateTaskForm() {
             </select>
             <p className="text-xs text-muted-foreground">
               Team members can edit shared tasks. Viewers can read them only.
+            </p>
+          </div>
+
+          <div className="max-w-md space-y-2">
+            <Label htmlFor="task-due-date">Due date and time (optional)</Label>
+            <Input
+              id="task-due-date"
+              type="datetime-local"
+              step={60}
+              {...register('dueDate')}
+            />
+            <p className="text-xs text-muted-foreground">
+              TaskFlow emails the task owner when this date and time arrives.
             </p>
           </div>
 

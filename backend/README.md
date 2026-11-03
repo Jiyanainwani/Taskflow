@@ -29,6 +29,40 @@
 
 The task list uses a 30-second Redis cache with separate entries per user and query. Task writes and team membership changes advance a shared cache generation so stale pages are no longer served. Cache reads fall back to MongoDB when Redis is unavailable.
 
+## Due-date reminders
+
+Task reminders are persisted in BullMQ on Redis and sent to the task owner's email when the selected due date and time arrives. Changing a due date reschedules the job; completing or deleting a task cancels its pending reminder. Delivery failures retry three times with exponential backoff, then appear at `/dashboard/admin/reminders` for an administrator to review or retry.
+
+Add these settings to `backend/.env` to enable SMTP delivery and the restricted failed-reminder view:
+
+```dotenv
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-smtp-user
+SMTP_PASSWORD=your-smtp-password
+SMTP_FROM=taskflow@example.com
+TASKFLOW_ADMIN_USER_IDS=your-mongodb-user-id
+```
+
+`TASKFLOW_ADMIN_USER_IDS` accepts comma-separated MongoDB user IDs. The API denies access to the failed-reminder endpoints when the requester is not on this allowlist. Without SMTP settings, the reminder job retries and then enters the dead-letter queue; the rest of the API can still start.
+
+### Task attachments
+
+Task attachments use private S3-compatible object storage with presigned uploads and downloads. Set `S3_BUCKET` and `S3_REGION`; for AWS, credentials can use the normal AWS SDK credential chain, or set `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`. For an S3-compatible provider, also set `S3_ENDPOINT` and the provider credentials. Keep the bucket private.
+
+Uploads are limited to PDF, JPEG, PNG, and WebP files up to 10 MB. The API checks the declared type, stored size, and file signature before listing an upload. Task readers can download files; only users allowed to edit a task can upload or delete them. The API can start without storage configured, but attachment operations return `503 Service Unavailable` until `S3_BUCKET` is set.
+
+Configure bucket CORS for the frontend origin with `PUT` and `GET` methods and the `Content-Type` request header. The browser uploads directly to the short-lived signed URL, so object bytes do not pass through the API server.
+
+```dotenv
+S3_BUCKET=your-private-bucket
+S3_REGION=us-east-1
+S3_ENDPOINT=
+S3_ACCESS_KEY_ID=
+S3_SECRET_ACCESS_KEY=
+```
+
 Start the API and Redis together with Docker Compose from this directory:
 
 ```bash
@@ -54,6 +88,22 @@ The script defaults to `http://localhost:3001/api` and `redis://localhost:6379`.
 The benchmark logs in once and performs only `GET /tasks` requests. It clears the two Redis read-metric counters and increments the shared task-cache generation to ensure the cold pass starts without reusable entries; this does not delete tasks or MongoDB data. Avoid running other load tests at the same time, since they would affect the shared counters. The script writes measured p95 latency and hit-rate results to `reports/task-cache-performance.md`; no figures are committed before a real run.
 
 Email/password login is limited to 10 attempts per client IP in a rolling 15-minute window. A blocked request receives `429 Too Many Requests` and a `Retry-After` header. IP addresses are hashed before they are used as Redis keys. If Redis is unavailable, login remains available and the limiter logs a warning. If the API is deployed behind a trusted reverse proxy, configure Express proxy trust for that deployment so the limiter receives the actual client IP.
+
+## Health, logs, and error tracking
+
+`GET /api/health` checks MongoDB and Redis and responds with `503 Service Unavailable` if either dependency is unhealthy. The API writes structured JSON logs through Pino and redacts authorization and cookie headers.
+
+Set `SENTRY_DSN` to enable Sentry reporting. `SENTRY_ENVIRONMENT` labels events and `SENTRY_TRACES_SAMPLE_RATE` controls trace sampling (default `0`). To deliberately verify event delivery, set `SENTRY_TEST_ENABLED=true`, sign in as an administrator listed in `TASKFLOW_ADMIN_USER_IDS`, then request `GET /api/admin/observability/sentry-test`; it deliberately returns an error that should appear in Sentry. Turn the test endpoint off again with `SENTRY_TEST_ENABLED=false` after verification.
+
+## CI and browser acceptance test
+
+GitHub Actions runs frontend lint/typecheck/build, backend lint/build/unit/e2e checks, a Playwright flow that signs up, signs in, creates a task, and confirms it appears in a second tab, plus a Docker image build. Locally, `npm run test:e2e` requires MongoDB and Redis on localhost and starts both the API and frontend for the browser test.
+
+## Deploy on Render
+
+The repository-root `render.yaml` defines the frontend, Dockerized API, and private Redis-compatible Key Value service in Singapore. After this file is merged to `main`, create a Render Blueprint from the repository and use the free plans for a demo. Render deploys new commits after the GitHub checks pass. The blueprint generates JWT secrets and asks for MongoDB Atlas, Google OAuth, admin user IDs, and S3-compatible storage settings. It derives the frontend/API URLs from Render's service URLs; add the resulting API callback URL (`https://<api-service>.onrender.com/api/auth/google/callback`) to the Google OAuth client's authorized redirect URIs.
+
+Render's free services are for testing and demos, not production: web services sleep when idle, free Key Value data is lost when it restarts, and free web services cannot send outbound SMTP on ports 465 or 587. Due-date reminder email will not work through Gmail SMTP on the free plan. For production, use paid services with persistent Key Value storage and an email provider/plan that permits delivery. Do not put local `.env` secrets in `render.yaml` or Git.
 
 ## Project setup
 

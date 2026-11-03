@@ -1,9 +1,5 @@
 import { getAccessToken } from '@/lib/auth'
-
-const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api').replace(
-  /\/$/,
-  '',
-)
+import { API_URL } from '@/lib/api-url'
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getAccessToken()
