@@ -93,30 +93,30 @@ export function CreateTaskForm() {
   })
 
   return (
-    <Card className="overflow-hidden border-primary/30 bg-card shadow-lg">
-      <CardHeader className="border-b border-border/50 pb-5">
-        <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/15 text-primary">
-            <Plus className="h-6 w-6" />
+    <Card className="gap-0 overflow-hidden border-transparent bg-card py-0 shadow-sm ring-1 ring-border/70">
+      <CardHeader className="w-full border-b border-border/60 bg-gradient-to-r from-primary/[0.09] via-primary/[0.035] to-transparent py-5 sm:py-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <Plus className="h-5 w-5" />
           </div>
 
           <div>
-            <CardTitle className="text-xl sm:text-2xl">
-              Create a new task
+            <CardTitle className="text-lg font-semibold tracking-tight sm:text-xl">
+              Create a task
             </CardTitle>
 
             <p className="mt-1 text-sm text-muted-foreground sm:text-base">
-              Add a task to your TaskFlow workspace.
+              Capture a next step for yourself or your team.
             </p>
           </div>
         </div>
       </CardHeader>
 
-      <CardContent className="p-5 sm:p-6 lg:p-7">
+      <CardContent className="w-full p-5 sm:p-6 lg:p-7">
         <form onSubmit={onSubmit} className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="title" className="text-sm font-semibold">
+          <div className="grid gap-5 lg:grid-cols-2">
+            <div className="flex min-w-0 flex-col gap-2">
+              <Label htmlFor="title" className="text-xs font-semibold">
                 Title <span className="text-destructive">*</span>
               </Label>
 
@@ -125,7 +125,7 @@ export function CreateTaskForm() {
                 type="text"
                 placeholder="Enter task title..."
                 {...register('title')}
-                className="h-12 bg-background/60 text-base"
+                className="h-11 bg-background text-sm shadow-sm"
                 aria-invalid={!!errors.title}
               />
 
@@ -136,10 +136,10 @@ export function CreateTaskForm() {
               )}
             </div>
 
-            <div className="space-y-2">
+            <div className="flex min-w-0 flex-col gap-2">
               <Label
                 htmlFor="description"
-                className="text-sm font-semibold"
+                className="text-xs font-semibold"
               >
                 Description
               </Label>
@@ -148,8 +148,8 @@ export function CreateTaskForm() {
                 id="description"
                 placeholder="Enter task description (optional)..."
                 {...register('description')}
-                rows={3}
-                className="min-h-12 resize-none bg-background/60 text-base"
+                rows={1}
+                className="h-11 min-h-11 resize-y bg-background py-3 text-sm shadow-sm"
                 aria-invalid={!!errors.description}
               />
 
@@ -161,34 +161,37 @@ export function CreateTaskForm() {
             </div>
           </div>
 
-          <div className="max-w-md space-y-2">
-            <Label htmlFor="task-team">Save task to</Label>
-            <select
-              id="task-team"
-              {...register('teamId')}
-              className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
-            >
-              <option value="">Personal tasks</option>
-              {manageableTeams.map((team) => (
-                <option key={team._id} value={team._id}>Team: {team.name}</option>
-              ))}
-            </select>
-            <p className="text-xs text-muted-foreground">
-              Team members can edit shared tasks. Viewers can read them only.
-            </p>
-          </div>
+          <div className="grid gap-5 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="task-team">Save task to</Label>
+              <select
+                id="task-team"
+                {...register('teamId')}
+                className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+              >
+                <option value="">Personal tasks</option>
+                {manageableTeams.map((team) => (
+                  <option key={team._id} value={team._id}>Team: {team.name}</option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Team members can edit shared tasks. Viewers can read them only.
+              </p>
+            </div>
 
-          <div className="max-w-md space-y-2">
-            <Label htmlFor="task-due-date">Due date and time (optional)</Label>
-            <Input
-              id="task-due-date"
-              type="datetime-local"
-              step={60}
-              {...register('dueDate')}
-            />
-            <p className="text-xs text-muted-foreground">
-              TaskFlow emails the task owner when this date and time arrives.
-            </p>
+            <div className="space-y-2">
+              <Label htmlFor="task-due-date">Due date and time (optional)</Label>
+              <Input
+                id="task-due-date"
+                type="datetime-local"
+                step={60}
+                className="h-10 bg-background shadow-sm"
+                {...register('dueDate')}
+              />
+              <p className="text-xs text-muted-foreground">
+                Set a due date to schedule a reminder for the task owner.
+              </p>
+            </div>
           </div>
 
           <div className="flex items-center justify-between gap-4">
@@ -211,7 +214,7 @@ export function CreateTaskForm() {
               type="submit"
               disabled={mutation.isPending}
               size="lg"
-              className="gap-2 px-6 shadow-md"
+              className="h-10 gap-2 rounded-lg px-5 shadow-sm shadow-primary/20"
             >
               <Plus className="h-5 w-5" />
               {mutation.isPending ? 'Creating...' : 'Create Task'}

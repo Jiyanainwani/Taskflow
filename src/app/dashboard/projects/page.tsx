@@ -72,33 +72,33 @@ export default function ProjectsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto w-full max-w-6xl space-y-8">
+    <main className="min-h-screen px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
+      <div className="mx-auto w-full max-w-6xl space-y-9">
         <header>
-          <p className="text-sm font-medium text-primary">Workspace</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">Projects</h1>
-          <p className="mt-2 max-w-2xl text-muted-foreground">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Planning</p>
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Projects</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
             Organize your work into projects. Projects are currently private to their creator.
           </p>
         </header>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Plus className="size-5 text-primary" /> Create a project
+        <Card className="gap-0 overflow-hidden border-transparent py-0 shadow-sm ring-1 ring-border/70">
+          <CardHeader className="w-full border-b border-border/60 bg-gradient-to-r from-primary/[0.09] via-primary/[0.035] to-transparent py-4">
+            <CardTitle className="flex items-center gap-2 text-base font-semibold tracking-tight">
+              <Plus className="size-4 text-primary" /> Create a project
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={createProject} className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
-              <div className="space-y-2">
-                <Label htmlFor="project-name">Project name</Label>
-                <Input id="project-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={100} required placeholder="e.g. Website redesign" />
+          <CardContent className="w-full p-5 sm:p-6">
+            <form onSubmit={createProject} className="grid gap-x-5 gap-y-4 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.4fr)_auto] md:items-end">
+              <div className="flex min-w-0 flex-col gap-2">
+                <Label htmlFor="project-name" className="text-xs font-semibold">Project name</Label>
+                <Input id="project-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={100} required placeholder="e.g. Website redesign" className="h-11 bg-background shadow-sm" />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="project-description">Description</Label>
-                <Textarea id="project-description" value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1000} rows={1} placeholder="What is this project about?" />
+              <div className="flex min-w-0 flex-col gap-2">
+                <Label htmlFor="project-description" className="text-xs font-semibold">Description</Label>
+                <Textarea id="project-description" value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1000} rows={1} placeholder="What is this project about?" className="h-11 min-h-11 resize-y bg-background py-3 shadow-sm" />
               </div>
-              <Button type="submit" disabled={createMutation.isPending || !name.trim()}>
+              <Button type="submit" className="h-11 w-full rounded-lg px-5 shadow-sm shadow-primary/15 md:w-auto" disabled={createMutation.isPending || !name.trim()}>
                 {createMutation.isPending ? 'Creating…' : 'Create project'}
               </Button>
             </form>
@@ -134,7 +134,7 @@ export default function ProjectsPage() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {projectsQuery.data.map((project) => (
-                <Card key={project._id}>
+                <Card key={project._id} className="border-transparent shadow-sm ring-1 ring-border/70 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
                   <CardContent className="p-5">
                     {editingId === project._id ? (
                       <form onSubmit={(event) => saveEdit(event, project._id)} className="space-y-4">
@@ -151,10 +151,12 @@ export default function ProjectsPage() {
                       <div className="flex min-h-28 flex-col">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <h3 className="truncate text-lg font-semibold">{project.name}</h3>
+                            <h3 className="truncate text-base font-semibold tracking-tight">{project.name}</h3>
                             <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{project.description || 'No description added.'}</p>
                           </div>
-                          <FolderKanban className="size-5 shrink-0 text-primary" />
+                          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                            <FolderKanban className="size-5" />
+                          </span>
                         </div>
                         <div className="mt-auto flex justify-end gap-2 border-t border-border/60 pt-3">
                           <Button variant="outline" size="sm" onClick={() => beginEdit(project)}><Pencil className="mr-2 size-4" />Edit</Button>

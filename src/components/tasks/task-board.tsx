@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { GripVertical } from 'lucide-react'
+import { CalendarClock, GripVertical, SlidersHorizontal } from 'lucide-react'
 
 import { DeleteTaskButton } from '@/components/tasks/delete-task-button'
 import { EditTaskForm } from '@/components/tasks/edit-task-form'
@@ -13,10 +13,10 @@ import { useUpdateTask } from '@/lib/task-queries'
 import type { ApiTaskPriority, ApiTaskStatus } from '@/lib/tasks-api'
 import type { Task } from '@/types/task'
 
-const columns: { status: ApiTaskStatus; title: string; color: string }[] = [
-  { status: 'todo', title: 'To do', color: 'bg-amber-500' },
-  { status: 'in-progress', title: 'In progress', color: 'bg-sky-500' },
-  { status: 'done', title: 'Done', color: 'bg-emerald-500' },
+const columns: { status: ApiTaskStatus; title: string; color: string; surface: string; heading: string }[] = [
+  { status: 'todo', title: 'To do', color: 'bg-amber-500', surface: 'bg-amber-500/[0.035]', heading: 'bg-amber-500/[0.08]' },
+  { status: 'in-progress', title: 'In progress', color: 'bg-sky-500', surface: 'bg-sky-500/[0.035]', heading: 'bg-sky-500/[0.08]' },
+  { status: 'done', title: 'Done', color: 'bg-emerald-500', surface: 'bg-emerald-500/[0.035]', heading: 'bg-emerald-500/[0.08]' },
 ]
 
 type TaskBoardProps = {
@@ -82,41 +82,43 @@ export function TaskBoard({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/60 bg-card p-4">
-        <label className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground">Status</span>
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border/70 bg-card/90 p-3 shadow-sm sm:px-4">
+        <div className="mr-1 flex items-center gap-2 px-1 text-xs font-semibold text-muted-foreground">
+          <SlidersHorizontal className="size-4 text-primary" />
+          <span>Filters</span>
+        </div>
+        <label className="sr-only" htmlFor="task-status-filter">Filter by status</label>
           <select
+            id="task-status-filter"
             aria-label="Filter tasks by status"
             value={statusFilter ?? ''}
             onChange={(event) => onFilterChange('status', event.target.value)}
-            className="h-9 rounded-lg border border-input bg-background px-3"
+            className="h-9 rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20"
           >
             <option value="">All statuses</option>
             {columns.map((column) => <option key={column.status} value={column.status}>{column.title}</option>)}
           </select>
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground">Priority</span>
+        <label className="sr-only" htmlFor="task-priority-filter">Filter by priority</label>
           <select
+            id="task-priority-filter"
             aria-label="Filter tasks by priority"
             value={priorityFilter ?? ''}
             onChange={(event) => onFilterChange('priority', event.target.value)}
-            className="h-9 rounded-lg border border-input bg-background px-3"
+            className="h-9 rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20"
           >
             <option value="">All priorities</option>
             <option value="high">High</option>
             <option value="medium">Medium</option>
             <option value="low">Low</option>
           </select>
-          {(statusFilter || priorityFilter) && (
-            <Button variant="ghost" size="sm" onClick={() => {
-              onFilterChange('status', '')
-              onFilterChange('priority', '')
-            }}>
-              Clear filters
-            </Button>
-          )}
-        </label>
+        {(statusFilter || priorityFilter) && (
+          <Button variant="ghost" size="sm" className="ml-auto text-muted-foreground" onClick={() => {
+            onFilterChange('status', '')
+            onFilterChange('priority', '')
+          }}>
+            Clear filters
+          </Button>
+        )}
       </div>
 
       <div className="grid min-h-80 gap-4 lg:grid-cols-3">
@@ -133,22 +135,22 @@ export function TaskBoard({
                 if (taskId) moveTask(taskId, column.status)
                 setDraggingTaskId(null)
               }}
-              className={`min-w-0 rounded-2xl border border-border/70 bg-muted/30 p-3 transition-colors ${draggingTaskId ? 'border-dashed border-primary/60 bg-primary/5' : ''}`}
+              className={`min-w-0 rounded-2xl border border-border/60 ${column.surface} p-3 transition-colors ${draggingTaskId ? 'border-dashed border-primary/60 bg-primary/5' : ''}`}
             >
-              <header className="mb-3 flex items-center justify-between px-1 py-1">
-                <h3 className="flex items-center gap-2 font-semibold">
-                  <span className={`size-2.5 rounded-full ${column.color}`} />
+              <header className={`mb-3 flex items-center justify-between rounded-xl ${column.heading} px-3 py-2.5 ring-1 ring-border/40`}>
+                <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+                  <span className={`size-2 rounded-full ${column.color} ring-4 ring-background`} />
                   {column.title}
                 </h3>
-                <span className="rounded-full bg-background px-2 py-0.5 text-xs text-muted-foreground">
+                <span className="min-w-6 rounded-full bg-muted px-2 py-0.5 text-center text-[11px] font-semibold tabular-nums text-muted-foreground">
                   {columnTasks.length}
                 </span>
               </header>
 
               <div className="space-y-3">
                 {columnTasks.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-border/70 px-3 py-7 text-center text-sm text-muted-foreground">
-                    Drop tasks here
+                  <p className="rounded-xl border border-dashed border-border px-3 py-8 text-center text-xs leading-5 text-muted-foreground">
+                    Drop a task here, or create one to get started.
                   </p>
                 ) : columnTasks.map((task) => {
                   const editable = canManage(task)
@@ -164,20 +166,20 @@ export function TaskBoard({
                         setDraggingTaskId(task.id)
                       }}
                       onDragEnd={() => setDraggingTaskId(null)}
-                      className={`border-border/70 bg-card shadow-sm ${editable ? 'cursor-grab active:cursor-grabbing' : ''} ${draggingTaskId === task.id ? 'opacity-50' : ''}`}
+                      className={`border-transparent bg-card shadow-sm ring-1 ring-border/60 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${task.priority === 'high' ? 'border-l-2 border-l-rose-500' : task.priority === 'low' ? 'border-l-2 border-l-slate-400' : 'border-l-2 border-l-amber-400'} ${editable ? 'cursor-grab active:cursor-grabbing' : ''} ${draggingTaskId === task.id ? 'opacity-50' : ''}`}
                     >
                       <CardContent className="space-y-3 p-4">
                         <div className="flex items-start gap-2">
                           {editable && <GripVertical aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />}
                           <div className="min-w-0 flex-1">
-                            <h4 className={`font-medium ${task.completed ? 'text-muted-foreground line-through' : ''}`}>{task.title}</h4>
-                            {sharedTeam && <p className="mt-1 text-xs font-medium text-primary">{sharedTeam}{!editable && ' · Read only'}</p>}
-                            {task.description && <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{task.description}</p>}
-                            {task.dueDate && <p className="mt-2 text-xs text-muted-foreground">Due {new Date(task.dueDate).toLocaleString()}</p>}
+                            <h4 className={`text-sm font-semibold leading-5 tracking-tight ${task.completed ? 'text-muted-foreground line-through' : ''}`}>{task.title}</h4>
+                            {sharedTeam && <p className="mt-1.5 text-[11px] font-medium text-primary">{sharedTeam}{!editable && ' · View only'}</p>}
+                            {task.description && <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">{task.description}</p>}
+                            {task.dueDate && <p className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground"><CalendarClock className="size-3.5" />Due {new Date(task.dueDate).toLocaleString()}</p>}
                           </div>
-                          <span className="shrink-0 rounded-full bg-muted px-2 py-1 text-[11px] font-medium capitalize text-muted-foreground">{task.priority ?? 'medium'}</span>
+                          <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold capitalize ${task.priority === 'high' ? 'bg-rose-500/10 text-rose-600 dark:text-rose-300' : task.priority === 'low' ? 'bg-slate-500/10 text-slate-600 dark:text-slate-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>{task.priority ?? 'medium'}</span>
                         </div>
-                        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2.5">
                           {editable ? (
                             <>
                               <label className="sr-only" htmlFor={`task-status-${task.id}`}>Move {task.title} to status</label>
@@ -186,7 +188,7 @@ export function TaskBoard({
                                 aria-label={`Move ${task.title} to status`}
                                 value={task.status ?? 'todo'}
                                 onChange={(event) => moveTask(task.id, event.target.value as ApiTaskStatus)}
-                                className="h-8 rounded-lg border border-input bg-background px-2 text-xs"
+                                className="h-8 rounded-lg border border-input bg-background px-2 text-xs shadow-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
                               >
                                 {columns.map((item) => <option key={item.status} value={item.status}>{item.title}</option>)}
                               </select>

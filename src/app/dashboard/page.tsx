@@ -1,9 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Clock3, ListTodo } from 'lucide-react'
+import { ArrowDown, CheckCircle2, Clock3, ListTodo, Sparkles } from 'lucide-react'
 
-import { ThemeToggle } from '@/components/theme-toggle'
 import { CreateTaskForm } from '@/components/tasks/create-task-form'
 import { TaskBoard } from '@/components/tasks/task-board'
 import { Button } from '@/components/ui/button'
@@ -108,45 +107,58 @@ export default function DashboardPage() {
   )
 
   const completedTasks = tasks.filter((task) => task.completed).length
-  const openTasks = tasks.length - completedTasks
+  const inProgressTasks = tasks.filter((task) => task.status === 'in-progress').length
 
   const stats = [
     {
-      title: 'Tasks loaded',
+      title: 'Tasks in view',
       value: tasks.length,
       icon: ListTodo,
-      description: 'Tasks fetched from your workspace',
-      className: 'text-primary bg-primary/10',
+      description: 'Across your workspace',
+      className: 'text-indigo-700 bg-indigo-500/10 dark:text-indigo-300',
     },
     {
       title: 'Completed',
       value: completedTasks,
       icon: CheckCircle2,
-      description: 'Tasks marked done',
-      className: 'text-emerald-500 bg-emerald-500/10',
+      description: 'Good work adds up',
+      className: 'text-emerald-700 bg-emerald-500/10 dark:text-emerald-300',
     },
     {
-      title: 'Open',
-      value: openTasks,
+      title: 'In progress',
+      value: inProgressTasks,
       icon: Clock3,
-      description: 'Tasks not marked done',
-      className: 'text-amber-500 bg-amber-500/10',
+      description: 'Moving forward now',
+      className: 'text-sky-700 bg-sky-500/10 dark:text-sky-300',
     },
   ]
 
   return (
-    <main className="min-h-screen bg-background px-4 py-6 sm:px-6 lg:px-8">
+    <main className="min-h-screen px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
       <div className="mx-auto w-full max-w-[1500px]">
-        <header className="mb-8 flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
-              Dashboard
-            </h1>
-            <p className="mt-2 text-base text-muted-foreground sm:text-lg">
-              Welcome back to TaskFlow. Manage your tasks and keep track of your progress.
-            </p>
+        <header className="relative mb-8 overflow-hidden rounded-3xl bg-[linear-gradient(120deg,oklch(0.37_0.14_265)_0%,oklch(0.48_0.2_272)_54%,oklch(0.56_0.18_250)_100%)] px-6 py-7 text-white shadow-[0_24px_60px_-32px_oklch(0.35_0.18_265_/_0.7)] sm:px-8 sm:py-9">
+          <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-28 size-80 rounded-full border border-white/10 bg-white/[0.04]" />
+          <div aria-hidden="true" className="pointer-events-none absolute -right-4 -top-14 size-56 rounded-full border border-white/10" />
+          <div className="relative flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-end">
+            <div className="max-w-2xl">
+              <p className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70">
+                <Sparkles className="size-3.5" /> TaskFlow workspace
+              </p>
+              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+                Make progress, one task at a time.
+              </h1>
+              <p className="mt-3 max-w-xl text-sm leading-6 text-white/75 sm:text-base">
+                Your team’s priorities, updates, and next steps — all in one place.
+              </p>
+            </div>
+            <Button
+              type="button"
+              className="h-10 gap-2 rounded-lg bg-white px-4 font-semibold text-primary shadow-sm hover:bg-white/90"
+              onClick={() => document.getElementById('title')?.focus()}
+            >
+              Create a task <ArrowDown className="size-4" />
+            </Button>
           </div>
-          <ThemeToggle />
         </header>
 
         <section className="mb-8 grid gap-4 md:grid-cols-3" aria-label="Task summary">
@@ -155,17 +167,17 @@ export default function DashboardPage() {
             return (
               <Card
                 key={stat.title}
-                className="overflow-hidden border-border/60 bg-card/80 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                className="group overflow-hidden border-transparent bg-card/95 shadow-sm ring-1 ring-border/70 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:shadow-primary/5"
               >
-                <CardContent className="flex items-center gap-5 p-5 sm:p-6">
+                <CardContent className="flex items-center gap-4 p-5 sm:p-6">
                   <div
-                    className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${stat.className}`}
+                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${stat.className}`}
                   >
-                    <Icon className="h-7 w-7" />
+                    <Icon className="h-5 w-5" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
-                    <p className="mt-1 text-3xl font-bold tracking-tight">{stat.value}</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{stat.title}</p>
+                    <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums transition-colors group-hover:text-primary">{stat.value}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{stat.description}</p>
                   </div>
                 </CardContent>
@@ -174,22 +186,22 @@ export default function DashboardPage() {
           })}
         </section>
 
-        <section id="new-task" className="mb-8">
+        <section id="new-task" className="mb-10">
           <CreateTaskForm />
         </section>
 
         <section id="tasks" aria-labelledby="tasks-heading">
           <div className="mb-5 flex items-end justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <ListTodo className="h-6 w-6" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <ListTodo className="h-5 w-5" />
               </div>
               <div>
-                <h2 id="tasks-heading" className="text-2xl font-bold tracking-tight">
+                <h2 id="tasks-heading" className="text-xl font-semibold tracking-tight">
                   Tasks
                 </h2>
                 <p className="text-sm text-muted-foreground sm:text-base">
-                  Your tasks and progress.
+                  Keep the next steps moving.
                 </p>
               </div>
             </div>
