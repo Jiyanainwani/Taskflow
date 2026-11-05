@@ -17,6 +17,7 @@ import { HealthController } from './health/health.controller.js';
 import { LoggerModule } from 'nestjs-pino';
 import { SentryModule, SentryGlobalFilter } from '@sentry/nestjs/setup';
 import { APP_FILTER } from '@nestjs/core';
+import { AiModule } from './ai/ai.module.js';
 
 @Module({
   imports: [
@@ -60,6 +61,12 @@ import { APP_FILTER } from '@nestjs/core';
         SENTRY_ENVIRONMENT: Joi.string().allow('').default(''),
         SENTRY_TRACES_SAMPLE_RATE: Joi.number().min(0).max(1).default(0),
         SENTRY_TEST_ENABLED: Joi.boolean().default(false),
+        GOOGLE_GENERATIVE_AI_API_KEY: Joi.string().allow('').default(''),
+        AI_TEXT_MODEL: Joi.string().default('gemini-3.8-flash'),
+        AI_EMBEDDING_MODEL: Joi.string().default('gemini-embedding-001'),
+        AI_DAILY_REQUEST_LIMIT: Joi.number().integer().min(1).max(1000).default(10),
+        AI_INPUT_USD_PER_MILLION: Joi.number().min(0).default(0.75),
+        AI_OUTPUT_USD_PER_MILLION: Joi.number().min(0).default(3.75),
       }),
     }),
 
@@ -83,6 +90,7 @@ import { APP_FILTER } from '@nestjs/core';
     RedisCacheModule,
     RealtimeModule,
     RemindersModule,
+    AiModule,
   ],
   controllers: [AppController, HealthController],
   providers: [
