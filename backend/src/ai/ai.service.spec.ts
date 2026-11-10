@@ -23,6 +23,7 @@ const validTasks: MagicAddModelResult['tasks'] = [
 function makeService() {
   const model = {
     isConfigured: vi.fn(() => true),
+    streamMagicTasks: vi.fn(),
     generateMagicTasks: vi.fn(async () => ({
       tasks: validTasks,
       inputTokens: 100,
@@ -66,6 +67,24 @@ function makeService() {
   return { service, model, config, redis, transaction, logger };
 }
 
+function makeStreamResponse() {
+  const events: Array<Record<string, unknown>> = [];
+  const response = {
+    status: vi.fn().mockReturnThis(),
+    setHeader: vi.fn(),
+    flushHeaders: vi.fn(),
+    write: vi.fn((chunk: string) => {
+      events.push(JSON.parse(chunk.replace(/^data:\s*/, '').trim()));
+      return true;
+    }),
+    end: vi.fn(),
+    once: vi.fn(),
+    destroyed: false,
+    writableEnded: false,
+  };
+  return { response, events };
+}
+
 describe('AiService', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -79,6 +98,69 @@ describe('AiService', () => {
     expect(result).toEqual({ tasks: validTasks, cached: false });
     expect(model.generateMagicTasks).toHaveBeenCalledOnce();
     expect(redis.set).toHaveBeenCalledOnce();
+  });
+
+  it('streams complete validated task drafts before the final confirmation event', async () => {
+    const { service, model } = makeService();
+    const { response, events } = makeStreamResponse();
+    model.streamMagicTasks.mockReturnValue({
+      elementStream: (async function* () {
+        yield validTasks[0];
+      })(),
+      output: Promise.resolve(validTasks),
+      totalUsage: Promise.resolve({ inputTokens: 100, outputTokens: 40 }),
+    });
+
+    await service.streamMagicTasks(
+      'user-1',
+      { notes: 'Send the project update.' },
+      response as never,
+    );
+
+    expect(events.map((event) => event.type)).toEqual([
+      'attempt',
+      'task',
+      'complete',
+    ]);
+    expect(events[1]?.task).toEqual(validTasks[0]);
+    expect(response.end).toHaveBeenCalledOnce();
+  });
+
+  it('resets streamed drafts and retries once after invalid structured output', async () => {
+    const { service, model } = makeService();
+    const { response, events } = makeStreamResponse();
+    model.streamMagicTasks
+      .mockReturnValueOnce({
+        elementStream: (async function* () {
+          yield validTasks[0];
+          throw new InvalidMagicOutputError();
+        })(),
+        output: Promise.resolve(validTasks),
+        totalUsage: Promise.resolve({ inputTokens: 100, outputTokens: 40 }),
+      })
+      .mockReturnValueOnce({
+        elementStream: (async function* () {
+          yield validTasks[0];
+        })(),
+        output: Promise.resolve(validTasks),
+        totalUsage: Promise.resolve({ inputTokens: 130, outputTokens: 42 }),
+      });
+
+    await service.streamMagicTasks(
+      'user-1',
+      { notes: 'Send the project update.' },
+      response as never,
+    );
+
+    expect(model.streamMagicTasks).toHaveBeenCalledTimes(2);
+    expect(events.map((event) => event.type)).toEqual([
+      'attempt',
+      'task',
+      'attempt',
+      'task',
+      'complete',
+    ]);
+    expect(events[2]?.attempt).toBe(2);
   });
 
   it('retries once after invalid structured output', async () => {

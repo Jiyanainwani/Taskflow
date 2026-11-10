@@ -47,6 +47,22 @@ export class AiController {
     return this.aiService.generateMagicTasks(request.user!.id, dto);
   }
 
+  @Post('magic-add/stream')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Stream complete, schema-validated task drafts before the user confirms them',
+  })
+  @ApiResponse({ status: 200, description: 'Validated task drafts streamed as server-sent events' })
+  @ApiResponse({ status: 400, description: 'Notes are empty or too long' })
+  @ApiResponse({ status: 429, description: 'Daily AI request limit reached' })
+  async streamMagicAdd(
+    @Req() request: Request,
+    @Body() dto: MagicAddDto,
+    @Res() response: Response,
+  ) {
+    await this.aiService.streamMagicTasks(request.user!.id, dto, response);
+  }
+
   @Get('usage')
   @ApiOperation({ summary: 'Get the current user’s daily AI usage' })
   usage(@Req() request: Request) {
