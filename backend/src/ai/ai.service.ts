@@ -75,6 +75,7 @@ export class AiService {
     }
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      const attemptStartedAt = Date.now();
       try {
         const result = await this.model.generateMagicTasks(
           notes,
@@ -97,7 +98,7 @@ export class AiService {
         this.pinoLogger.info(
           {
             userId,
-            model: this.configService.get<string>('AI_TEXT_MODEL') ?? 'gemini-3.8-flash',
+            model: this.configService.get<string>('AI_TEXT_MODEL') ?? 'gemini-3.5-flash-lite',
             attempt: attempt + 1,
             inputTokens: result.inputTokens,
             outputTokens: result.outputTokens,
@@ -121,17 +122,39 @@ export class AiService {
           );
         }
 
+        const providerError =
+          error && typeof error === 'object'
+            ? (error as { statusCode?: unknown; isRetryable?: unknown })
+            : undefined;
+        const statusCode =
+          typeof providerError?.statusCode === 'number'
+            ? providerError.statusCode
+            : undefined;
+        const retryable =
+          typeof providerError?.isRetryable === 'boolean'
+            ? providerError.isRetryable
+            : undefined;
+        const timedOut =
+          error instanceof Error &&
+          /timeout|timed out/i.test(`${error.name} ${error.message}`);
+
         this.logger.error('Gemini task generation failed');
         this.pinoLogger.error(
           {
             userId,
+            model: this.configService.get<string>('AI_TEXT_MODEL') ?? 'gemini-3.5-flash-lite',
             attempt: attempt + 1,
             errorName: error instanceof Error ? error.name : 'UnknownError',
+            statusCode,
+            retryable,
+            durationMs: Date.now() - attemptStartedAt,
           },
           'AI magic add provider request failed',
         );
         throw new ServiceUnavailableException(
-          'Task suggestions are temporarily unavailable. Please try again.',
+          timedOut
+            ? 'Task suggestions took too long. Please try again with shorter notes.'
+            : 'Task suggestions are temporarily unavailable. Please try again.',
         );
       }
     }
@@ -299,9 +322,9 @@ export class AiService {
 
   private estimateCost(inputTokens: number, outputTokens: number) {
     const inputRate =
-      this.configService.get<number>('AI_INPUT_USD_PER_MILLION') ?? 0.75;
+      this.configService.get<number>('AI_INPUT_USD_PER_MILLION') ?? 0.3;
     const outputRate =
-      this.configService.get<number>('AI_OUTPUT_USD_PER_MILLION') ?? 3.75;
+      this.configService.get<number>('AI_OUTPUT_USD_PER_MILLION') ?? 2.5;
     return (
       (inputTokens * inputRate + outputTokens * outputRate) / 1_000_000
     );

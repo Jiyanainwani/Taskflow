@@ -58,7 +58,7 @@ export class GeminiAiModel {
 
     const provider = createGoogle({ apiKey });
     const modelId =
-      this.configService.get<string>('AI_TEXT_MODEL') ?? 'gemini-3.8-flash';
+      this.configService.get<string>('AI_TEXT_MODEL') ?? 'gemini-3.5-flash-lite';
 
     try {
       const result = await generateText({
@@ -72,9 +72,15 @@ export class GeminiAiModel {
           name: 'task_drafts',
           description: 'Actionable task drafts extracted from the meeting notes.',
         }),
-        temperature: 0.2,
         maxOutputTokens: 1600,
         maxRetries: 0,
+        timeout:
+          this.configService.get<number>('AI_GENERATION_TIMEOUT_MS') ?? 15_000,
+        providerOptions: {
+          google: {
+            thinkingConfig: { thinkingLevel: 'minimal' },
+          },
+        },
       });
 
       return {

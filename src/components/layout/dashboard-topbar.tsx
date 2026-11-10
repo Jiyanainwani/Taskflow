@@ -9,6 +9,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar'
 
 const routeTitles: Record<string, string> = {
   '/dashboard': 'Overview',
+  '/dashboard/magic-add': 'Magic Add',
   '/dashboard/teams': 'Teams',
   '/dashboard/projects': 'Projects',
   '/dashboard/admin/reminders': 'Failed reminders',

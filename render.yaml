@@ -46,9 +46,15 @@ services:
       - key: GOOGLE_GENERATIVE_AI_API_KEY
         sync: false
       - key: AI_TEXT_MODEL
-        value: gemini-3.8-flash
+        value: gemini-3.5-flash-lite
       - key: AI_EMBEDDING_MODEL
         value: gemini-embedding-001
+      - key: AI_GENERATION_TIMEOUT_MS
+        value: "15000"
+      - key: AI_INPUT_USD_PER_MILLION
+        value: "0.30"
+      - key: AI_OUTPUT_USD_PER_MILLION
+        value: "2.50"
       - key: S3_ENDPOINT
         sync: false
       - key: S3_REGION
