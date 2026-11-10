@@ -14,6 +14,7 @@ import { PinoLogger } from 'nestjs-pino';
 import type { Response } from 'express';
 import type { Redis } from 'ioredis';
 import { ZodError } from 'zod';
+import { NoObjectGeneratedError, TypeValidationError } from 'ai';
 
 import { REDIS_CLIENT } from '../cache/redis.constants.js';
 import { InvalidMagicOutputError, GeminiAiModel } from './gemini-ai-model.js';
@@ -163,6 +164,140 @@ export class AiService {
     throw new BadGatewayException(
       'I could not structure tasks from those notes. Try simplifying them and try again.',
     );
+  }
+
+  async streamMagicTasks(userId: string, dto: MagicAddDto, response: Response) {
+    const notes = this.normalizeNotes(dto.notes);
+    if (!this.model.isConfigured()) {
+      throw new ServiceUnavailableException(
+        'AI features are not configured. Please ask an administrator.',
+      );
+    }
+
+    const quota = await this.consumeQuota(userId);
+    const cacheKey = this.cacheKey(userId, notes);
+    const cached = await this.readCache(cacheKey);
+
+    response.status(200);
+    response.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    response.setHeader('Cache-Control', 'no-cache, no-transform');
+    response.setHeader('Connection', 'keep-alive');
+    response.setHeader('X-Accel-Buffering', 'no');
+    response.flushHeaders();
+
+    if (cached) {
+      this.writeStreamEvent(response, { type: 'attempt', attempt: 1 });
+      for (const task of cached) {
+        this.writeStreamEvent(response, { type: 'task', task });
+      }
+      this.writeStreamEvent(response, { type: 'complete', cached: true });
+      response.end();
+      await this.recordCacheHit(userId);
+      this.pinoLogger.info(
+        { userId, cacheHit: true, requestNumber: quota.used },
+        'AI magic add stream served from cache',
+      );
+      return;
+    }
+
+    const abortController = new AbortController();
+    response.once('close', () => {
+      if (!response.writableEnded) abortController.abort();
+    });
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (response.destroyed) return;
+      this.writeStreamEvent(response, { type: 'attempt', attempt: attempt + 1 });
+      const attemptStartedAt = Date.now();
+      try {
+        const result = this.model.streamMagicTasks(
+          notes,
+          attempt === 1,
+          abortController.signal,
+        );
+        let streamedTaskCount = 0;
+        for await (const task of result.elementStream) {
+          if (response.destroyed) return;
+          streamedTaskCount += 1;
+          if (streamedTaskCount > 12) throw new InvalidMagicOutputError();
+          this.writeStreamEvent(response, { type: 'task', task });
+        }
+
+        const tasks = MagicTasksSchema.parse(await result.output);
+        const usage = await result.totalUsage;
+        const inputTokens = usage.inputTokens ?? 0;
+        const outputTokens = usage.outputTokens ?? 0;
+        const estimatedCostUsd = this.estimateCost(inputTokens, outputTokens);
+        await this.writeCache(cacheKey, tasks);
+        await this.recordModelUsage(
+          userId,
+          inputTokens,
+          outputTokens,
+          estimatedCostUsd,
+        );
+        this.pinoLogger.info(
+          {
+            userId,
+            feature: 'magic-add',
+            model: this.configService.get<string>('AI_TEXT_MODEL') ?? 'gemini-3.5-flash-lite',
+            attempt: attempt + 1,
+            inputTokens,
+            outputTokens,
+            estimatedCostUsd,
+            durationMs: Date.now() - attemptStartedAt,
+          },
+          'AI magic add stream completed',
+        );
+        this.writeStreamEvent(response, { type: 'complete', cached: false });
+        response.end();
+        return;
+      } catch (error) {
+        if (abortController.signal.aborted || response.destroyed) return;
+        const invalidOutput =
+          error instanceof InvalidMagicOutputError ||
+          error instanceof ZodError ||
+          NoObjectGeneratedError.isInstance(error) ||
+          TypeValidationError.isInstance(error);
+
+        if (invalidOutput && attempt === 0) continue;
+        if (invalidOutput) {
+          this.writeStreamEvent(response, {
+            type: 'error',
+            message: 'I could not structure tasks from those notes. Try simplifying them and try again.',
+          });
+          response.end();
+          return;
+        }
+
+        const providerError =
+          error && typeof error === 'object'
+            ? (error as { statusCode?: unknown; isRetryable?: unknown })
+            : undefined;
+        this.pinoLogger.error(
+          {
+            userId,
+            feature: 'magic-add',
+            attempt: attempt + 1,
+            errorName: error instanceof Error ? error.name : 'UnknownError',
+            statusCode:
+              typeof providerError?.statusCode === 'number'
+                ? providerError.statusCode
+                : undefined,
+            durationMs: Date.now() - attemptStartedAt,
+          },
+          'AI magic add stream provider request failed',
+        );
+        this.writeStreamEvent(response, {
+          type: 'error',
+          message:
+            error instanceof Error && /timeout|timed out/i.test(`${error.name} ${error.message}`)
+              ? 'Task suggestions took too long. Please try again with shorter notes.'
+              : 'Task suggestions are temporarily unavailable. Please try again.',
+        });
+        response.end();
+        return;
+      }
+    }
   }
 
   async streamDailyDigest(

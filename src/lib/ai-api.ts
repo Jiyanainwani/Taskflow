@@ -34,6 +34,72 @@ export type SemanticSearchResult = {
   score: number
 }
 
+export type MagicAddStreamEvent =
+  | { type: 'attempt'; attempt: number }
+  | { type: 'task'; task: MagicTaskDraft }
+  | { type: 'complete'; cached: boolean }
+
+async function readMagicAddStream(
+  notes: string,
+  onEvent: (event: MagicAddStreamEvent) => void,
+  signal?: AbortSignal,
+) {
+  const token = getAccessToken()
+  if (!token) throw new Error('Please sign in to continue.')
+
+  let response: Response
+  try {
+    response = await fetch(`${API_URL}/ai/magic-add/stream`, {
+      method: 'POST',
+      credentials: 'include',
+      signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ notes }),
+    })
+  } catch {
+    if (signal?.aborted) return
+    throw new Error('Unable to reach TaskFlow. Check your connection and try again.')
+  }
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({})) as { message?: string }
+    throw new Error(body.message || 'Task suggestions could not be started.')
+  }
+  if (!response.body) throw new Error('Streaming is not available in this browser.')
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let pending = ''
+  try {
+    while (true) {
+      const { value, done } = await reader.read()
+      pending += decoder.decode(value, { stream: !done })
+      const events = pending.split('\n\n')
+      pending = events.pop() ?? ''
+      for (const event of events) {
+        const data = event
+          .split('\n')
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.slice(5).trim())
+          .join('\n')
+        if (!data) continue
+        const payload = JSON.parse(data) as MagicAddStreamEvent | { type: 'error'; message: string }
+        if (payload.type === 'error') throw new Error(payload.message)
+        onEvent(payload)
+      }
+      if (done) break
+    }
+  } catch (error) {
+    if (signal?.aborted) return
+    throw error
+  } finally {
+    reader.releaseLock()
+  }
+}
+
 async function readAiStream(path: string, onText: (chunk: string) => void, signal?: AbortSignal) {
   const token = getAccessToken()
   if (!token) throw new Error('Please sign in to continue.')
@@ -85,6 +151,14 @@ export const aiApi = {
       method: 'POST',
       body: JSON.stringify({ notes }),
     })
+  },
+
+  streamMagicAdd(
+    notes: string,
+    onEvent: (event: MagicAddStreamEvent) => void,
+    signal?: AbortSignal,
+  ) {
+    return readMagicAddStream(notes, onEvent, signal)
   },
 
   usage() {

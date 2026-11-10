@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, LoaderCircle, RotateCcw, Sparkles, Trash2 } from 'lucide-react'
 
@@ -60,8 +60,11 @@ export function MagicAddForm() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
   const [hasGenerated, setHasGenerated] = useState(false)
+  const [generationComplete, setGenerationComplete] = useState(false)
+  const [cacheHit, setCacheHit] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const usageQuery = useQuery({
     queryKey: usageQueryKey,
@@ -71,17 +74,26 @@ export function MagicAddForm() {
   })
 
   const generateMutation = useMutation({
-    mutationFn: aiApi.magicAdd,
-    onSuccess: (result) => {
-      const nextDrafts = result.tasks.map((task, index) => ({
-        ...task,
-        id: `${Date.now()}-${index}`,
-      }))
-      setDrafts(nextDrafts)
-      setSelectedIds(new Set(nextDrafts.map((task) => task.id)))
-      setSavedIds(new Set())
-      setSaveError(null)
-      setHasGenerated(true)
+    mutationFn: ({ notes: requestNotes, signal }: { notes: string; signal: AbortSignal }) =>
+      aiApi.streamMagicAdd(requestNotes, (event) => {
+        if (event.type === 'attempt') {
+          setDrafts([])
+          setSelectedIds(new Set())
+          setSavedIds(new Set())
+          setGenerationComplete(false)
+          return
+        }
+        if (event.type === 'task') {
+          const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+          setDrafts((current) => [...current, { ...event.task, id }])
+          setSelectedIds((current) => new Set(current).add(id))
+          return
+        }
+        setHasGenerated(true)
+        setGenerationComplete(true)
+        setCacheHit(event.cached)
+      }, signal),
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: usageQueryKey })
     },
   })
@@ -93,13 +105,45 @@ export function MagicAddForm() {
     && usageQuery.data?.remaining !== 0
 
   function startOver() {
+    abortControllerRef.current?.abort()
+    abortControllerRef.current = null
     setNotes('')
     setDrafts([])
     setSelectedIds(new Set())
     setSavedIds(new Set())
     setHasGenerated(false)
+    setGenerationComplete(false)
+    setCacheHit(false)
     setSaveError(null)
     generateMutation.reset()
+  }
+
+  function cancelGeneration() {
+    abortControllerRef.current?.abort()
+    abortControllerRef.current = null
+    setDrafts([])
+    setSelectedIds(new Set())
+    setSavedIds(new Set())
+    setHasGenerated(false)
+    setGenerationComplete(false)
+    setCacheHit(false)
+    setSaveError(null)
+    generateMutation.reset()
+  }
+
+  function generateDrafts(value = notes) {
+    abortControllerRef.current?.abort()
+    const abortController = new AbortController()
+    abortControllerRef.current = abortController
+    setDrafts([])
+    setSelectedIds(new Set())
+    setSavedIds(new Set())
+    setHasGenerated(false)
+    setGenerationComplete(false)
+    setCacheHit(false)
+    setSaveError(null)
+    generateMutation.reset()
+    generateMutation.mutate({ notes: value, signal: abortController.signal })
   }
 
   function updateDraft(id: string, update: Partial<MagicTaskDraft>) {
@@ -126,6 +170,7 @@ export function MagicAddForm() {
     setIsSaving(true)
     setSaveError(null)
     const successfullySaved = new Set(savedIds)
+    let allPendingDraftsSaved = true
 
     for (const draft of pendingDrafts) {
       try {
@@ -142,11 +187,13 @@ export function MagicAddForm() {
             ? error.message
             : 'Some tasks could not be saved. You can retry the remaining drafts.',
         )
+        allPendingDraftsSaved = false
         break
       }
     }
 
     setIsSaving(false)
+    if (allPendingDraftsSaved) startOver()
   }
 
   const selectedCount = drafts.filter((draft) => selectedIds.has(draft.id)).length
@@ -214,13 +261,23 @@ export function MagicAddForm() {
         <div className="flex flex-wrap items-center gap-3">
           <Button
             type="button"
-            onClick={() => generateMutation.mutate(notes)}
+            onClick={() => generateDrafts()}
             disabled={!canGenerate || drafts.length > 0}
             className="gap-2 rounded-lg px-4"
           >
             {isGenerating ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-            {isGenerating ? 'Finding task drafts…' : drafts.length > 0 ? 'Drafts ready' : 'Generate task drafts'}
+            {isGenerating ? 'Streaming task drafts…' : drafts.length > 0 ? 'Drafts ready' : 'Generate task drafts'}
           </Button>
+          {isGenerating && (
+            <Button type="button" variant="outline" onClick={cancelGeneration} className="gap-2">
+              Cancel generation
+            </Button>
+          )}
+          {generateMutation.isError && notes.trim() && (
+            <Button type="button" variant="outline" onClick={() => generateDrafts(notes)}>
+              Retry generation
+            </Button>
+          )}
           {drafts.length > 0 && (
             <Button type="button" variant="ghost" onClick={startOver} disabled={isSaving} className="gap-2">
               <RotateCcw className="size-4" /> Start over
@@ -250,7 +307,8 @@ export function MagicAddForm() {
                   Edit, deselect, or save the suggestions you want.
                 </p>
               </div>
-              {generateMutation.data?.cached && (
+              {isGenerating && <span role="status" className="text-xs text-primary">Streaming complete, validated drafts…</span>}
+              {cacheHit && (
                 <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
                   Loaded from cache
                 </span>
@@ -268,7 +326,7 @@ export function MagicAddForm() {
                         type="checkbox"
                         checked={selectedIds.has(draft.id)}
                         onChange={() => toggleDraft(draft.id)}
-                        disabled={isSaving || isSaved}
+                        disabled={isSaving || isSaved || isGenerating}
                         aria-label={`Include task draft ${index + 1}`}
                         className="mt-1 size-4 shrink-0 accent-primary"
                       />
@@ -281,7 +339,7 @@ export function MagicAddForm() {
                               value={draft.title}
                               maxLength={200}
                               onChange={(event) => updateDraft(draft.id, { title: event.target.value })}
-                              disabled={isSaving || isSaved}
+                              disabled={isSaving || isSaved || isGenerating}
                               className="bg-background"
                             />
                           </div>
@@ -291,7 +349,7 @@ export function MagicAddForm() {
                               id={`magic-add-priority-${draft.id}`}
                               value={draft.priority}
                               onChange={(event) => updateDraft(draft.id, { priority: event.target.value as MagicTaskDraft['priority'] })}
-                              disabled={isSaving || isSaved}
+                              disabled={isSaving || isSaved || isGenerating}
                               className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
                             >
                               <option value="low">Low</option>
@@ -308,7 +366,7 @@ export function MagicAddForm() {
                             maxLength={2_000}
                             rows={2}
                             onChange={(event) => updateDraft(draft.id, { description: event.target.value })}
-                            disabled={isSaving || isSaved}
+                            disabled={isSaving || isSaved || isGenerating}
                             className="min-h-20 resize-y bg-background"
                           />
                         </div>
@@ -345,7 +403,7 @@ export function MagicAddForm() {
                 <Button
                   type="button"
                   onClick={() => void saveSelectedDrafts()}
-                  disabled={isSaving || unsavedSelectedCount === 0 || drafts.some((draft) => selectedIds.has(draft.id) && !savedIds.has(draft.id) && !draft.title.trim())}
+                  disabled={isSaving || isGenerating || !generationComplete || unsavedSelectedCount === 0 || drafts.some((draft) => selectedIds.has(draft.id) && !savedIds.has(draft.id) && !draft.title.trim())}
                   className="gap-2 rounded-lg px-4"
                 >
                   {isSaving && <LoaderCircle className="size-4 animate-spin" />}
