@@ -11,6 +11,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Inject } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
+import type { Response } from 'express';
 import type { Redis } from 'ioredis';
 import { ZodError } from 'zod';
 
@@ -164,6 +165,112 @@ export class AiService {
     );
   }
 
+  async streamDailyDigest(
+    userId: string,
+    tasks: Array<Record<string, unknown>>,
+    response: Response,
+  ) {
+    if (!this.model.isConfigured()) {
+      throw new ServiceUnavailableException(
+        'AI features are not configured. Please ask an administrator.',
+      );
+    }
+
+    const snapshot = JSON.stringify(tasks);
+    const cacheKey = `taskflow:ai:v1:digest:cache:${userId}:${createHash('sha256').update(snapshot).digest('hex')}`;
+    let cachedText: string | null = null;
+    try {
+      cachedText = await this.redis.get(cacheKey);
+    } catch {
+      // The digest can still be generated if the optional cache is unavailable.
+    }
+
+    await this.consumeQuota(userId);
+    response.status(200);
+    response.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    response.setHeader('Cache-Control', 'no-cache, no-transform');
+    response.setHeader('Connection', 'keep-alive');
+    response.setHeader('X-Accel-Buffering', 'no');
+    response.flushHeaders();
+
+    if (cachedText) {
+      this.writeStreamEvent(response, { text: cachedText, cached: true });
+      this.writeStreamEvent(response, { done: true });
+      response.end();
+      await this.recordCacheHit(userId);
+      return;
+    }
+
+    const startedAt = Date.now();
+    let fullText = '';
+    const abortController = new AbortController();
+    response.once('close', () => {
+      if (!response.writableEnded) abortController.abort();
+    });
+    try {
+      const result = this.model.streamDailyDigest(tasks, abortController.signal);
+      for await (const chunk of result.textStream) {
+        if (response.destroyed) return;
+        fullText += chunk;
+        this.writeStreamEvent(response, { text: chunk, cached: false });
+      }
+
+      if (!fullText.trim()) {
+        throw new Error('The model returned an empty digest');
+      }
+
+      const usage = await result.usage;
+      const inputTokens = usage.inputTokens ?? 0;
+      const outputTokens = usage.outputTokens ?? 0;
+      const estimatedCostUsd = this.estimateCost(inputTokens, outputTokens);
+      await this.writeCacheText(cacheKey, fullText);
+      await this.recordModelUsage(
+        userId,
+        inputTokens,
+        outputTokens,
+        estimatedCostUsd,
+      );
+      this.pinoLogger.info(
+        {
+          userId,
+          feature: 'daily-digest',
+          inputTokens,
+          outputTokens,
+          estimatedCostUsd,
+          durationMs: Date.now() - startedAt,
+        },
+        'AI daily digest completed',
+      );
+      this.writeStreamEvent(response, { done: true });
+      response.end();
+    } catch (error) {
+      this.logger.error('Gemini daily digest generation failed');
+      this.pinoLogger.error(
+        {
+          userId,
+          feature: 'daily-digest',
+          errorName: error instanceof Error ? error.name : 'UnknownError',
+          durationMs: Date.now() - startedAt,
+        },
+        'AI daily digest provider request failed',
+      );
+      if (!response.destroyed) {
+        this.writeStreamEvent(response, {
+          error: 'The daily digest is temporarily unavailable. Please try again.',
+        });
+        response.end();
+      }
+    }
+  }
+
+  streamTaskSummary(
+    userId: string,
+    task: Record<string, unknown>,
+    response: Response,
+  ) {
+    return this.streamDailyDigest(userId, [task], response);
+  }
+
   async getUsage(userId: string) {
     const date = this.utcDateKey();
     const quotaKey = this.quotaKey(userId, date);
@@ -216,7 +323,7 @@ export class AiService {
     return notes;
   }
 
-  private async consumeQuota(userId: string) {
+  async consumeQuota(userId: string) {
     const now = new Date();
     const date = this.utcDateKey(now);
     const expiresAt = Math.floor(
@@ -272,6 +379,18 @@ export class AiService {
     }
   }
 
+  private async writeCacheText(key: string, text: string) {
+    try {
+      await this.redis.set(key, text, 'EX', CACHE_TTL_SECONDS);
+    } catch {
+      // A cache write should not discard valid model output.
+    }
+  }
+
+  private writeStreamEvent(response: Response, payload: Record<string, unknown>) {
+    response.write(`data: ${JSON.stringify(payload)}\n\n`);
+  }
+
   private async recordCacheHit(userId: string) {
     try {
       const key = this.usageKey(userId, this.utcDateKey());
@@ -301,6 +420,29 @@ export class AiService {
     } catch {
       this.logger.warn('Unable to record AI usage metrics');
     }
+  }
+
+  async recordEmbeddingUsage(userId: string, inputTokens: number) {
+    try {
+      const key = this.usageKey(userId, this.utcDateKey());
+      const rate = this.configService.get<number>('AI_EMBEDDING_USD_PER_MILLION') ?? 0.15;
+      const cost = (inputTokens * rate) / 1_000_000;
+      await this.redis
+        .multi()
+        .hincrby(key, 'modelCalls', 1)
+        .hincrby(key, 'inputTokens', inputTokens)
+        .hincrbyfloat(key, 'estimatedCostUsd', cost)
+        .expire(key, CACHE_TTL_SECONDS)
+        .exec();
+      return cost;
+    } catch {
+      this.logger.warn('Unable to record embedding usage metrics');
+      return 0;
+    }
+  }
+
+  async recordFeatureCacheHit(userId: string) {
+    await this.recordCacheHit(userId);
   }
 
   private cacheKey(userId: string, notes: string) {

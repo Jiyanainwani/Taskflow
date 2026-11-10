@@ -60,5 +60,6 @@ import { TaskAttachmentsService } from './task-attachments.service.js';
     AccessTokenGuard,
     TeamTaskWriteGuard,
   ],
+  exports: [TasksService],
 })
 export class TasksModule {}

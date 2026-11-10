@@ -68,6 +68,7 @@ import { AiModule } from './ai/ai.module.js';
         AI_DAILY_REQUEST_LIMIT: Joi.number().integer().min(1).max(1000).default(10),
         AI_INPUT_USD_PER_MILLION: Joi.number().min(0).default(0.3),
         AI_OUTPUT_USD_PER_MILLION: Joi.number().min(0).default(2.5),
+        AI_EMBEDDING_USD_PER_MILLION: Joi.number().min(0).default(0.15),
       }),
     }),
 
