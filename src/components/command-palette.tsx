@@ -65,6 +65,14 @@ export function CommandPalette() {
             <Sparkles />
             Magic Add
           </CommandItem>
+          <CommandItem onSelect={() => navigate('/dashboard/standup')} value="daily digest standup ai summary">
+            <Sparkles />
+            Daily digest
+          </CommandItem>
+          <CommandItem onSelect={() => navigate('/dashboard/search')} value="semantic search tasks comments by meaning ai">
+            <Sparkles />
+            Semantic search
+          </CommandItem>
           <CommandItem onSelect={() => navigate('/dashboard/teams')} value="teams">
             <UsersRound />
             Teams

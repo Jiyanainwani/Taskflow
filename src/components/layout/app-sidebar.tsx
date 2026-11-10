@@ -1,7 +1,7 @@
 
 'use client'
 
-import { BellRing, CheckSquare, Command, FolderKanban, LayoutDashboard, Sparkles, UsersRound } from 'lucide-react'
+import { BellRing, CheckSquare, Command, FolderKanban, LayoutDashboard, Search, Sparkles, UsersRound, Workflow } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -35,6 +35,16 @@ const items = [
     title: 'Magic Add',
     url: '/dashboard/magic-add',
     icon: Sparkles,
+  },
+  {
+    title: 'Daily digest',
+    url: '/dashboard/standup',
+    icon: Workflow,
+  },
+  {
+    title: 'Semantic search',
+    url: '/dashboard/search',
+    icon: Search,
   },
   {
     title: 'Teams',

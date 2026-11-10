@@ -101,6 +101,7 @@ AI_GENERATION_TIMEOUT_MS=15000
 AI_DAILY_REQUEST_LIMIT=10
 AI_INPUT_USD_PER_MILLION=0.30
 AI_OUTPUT_USD_PER_MILLION=2.50
+AI_EMBEDDING_USD_PER_MILLION=0.15
 ```
 
 Create a Gemini API key in [Google AI Studio](https://aistudio.google.com/app/apikey). Never put it in a `NEXT_PUBLIC_` variable or frontend code. The default daily request limit is 10 per user and can be changed by the backend operator. Redis is required to enforce the limit and serve prompt-cache entries; AI requests fail safely if Redis is unavailable.
@@ -110,6 +111,12 @@ Create a Gemini API key in [Google AI Studio](https://aistudio.google.com/app/ap
 The default Gemini 3.5 Flash-Lite model is selected for low-latency extraction and uses minimal thinking. Generation has a 15-second timeout by default, configurable with `AI_GENERATION_TIMEOUT_MS`. The estimated cost uses configurable input/output rates (defaulting to the current Gemini 3.5 Flash-Lite paid list rates); it is a list-price estimate, not a billing record. Eligible free-tier requests may cost $0 while within Google’s free limits. Model pricing and free-tier availability can change; check [Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing) before reporting a final average. Google’s free tier may use submitted content to improve its products. Use synthetic meeting notes for free-tier testing and do not send confidential work notes unless your provider plan and organization policy allow it.
 
 The prompt treats meeting notes as untrusted data, the model has no tools, and task drafts are constrained to a Zod schema. This prevents the generation request from saving or changing tasks. Input length, empty/emoji-only content, authentication, daily quota, and output shape are checked server-side.
+
+`POST /api/ai/digest` streams a standup-style digest over up to the 100 most recently created tasks the user can access. `POST /api/ai/tasks/:taskId/summary` streams a summary for one accessible task. Both are read-only, use the same per-user daily quota, cache identical task snapshots in Redis for 24 hours, and log token usage, estimated cost, and duration without logging task text. The UI is under **Daily digest** in the dashboard sidebar. The browser can cancel a stream; that cancellation is forwarded to the model request.
+
+`POST /api/ai/search` accepts `{ "query": "work blocked waiting for QA" }` and ranks matching tasks and comments using Gemini embeddings and cosine similarity. Embeddings are stored in MongoDB in the `aisearchdocuments` collection; only source IDs currently returned by the authenticated task access query are searched, so team role changes are honored dynamically. For this small deployment, it indexes up to 100 recent accessible tasks and 100 comments, then ranks those stored vectors in the API process. It does not require an Atlas Vector Search index or an extra vector database. Embeddings are refreshed when indexed content changes, and identical searches over the same snapshot are cached in Redis for 10 minutes. `AI_EMBEDDING_USD_PER_MILLION` defaults to the Gemini Embedding paid list rate; Google AI Studio may provide free-tier requests, depending on current availability. Check [Google's current pricing and data terms](https://ai.google.dev/gemini-api/docs/pricing) before presenting a cost estimate.
+
+The existing Magic Add boundary tests cover the five requested hostile input types: prompt-injection text is treated as untrusted content and cannot invoke tools; oversized notes are rejected; empty notes are rejected; non-English text is passed through for language-preserving extraction; emoji-only notes are rejected before a model call. These are automated checks of input handling and prompt guardrails, not a claim that an LLM can perfectly resist every injection.
 
 ## Health, logs, and error tracking
 
