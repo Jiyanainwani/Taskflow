@@ -95,18 +95,19 @@ The AI API uses Vercel AI SDK with Google's Gemini API. Set the key on the backe
 
 ```dotenv
 GOOGLE_GENERATIVE_AI_API_KEY=your-google-ai-studio-key
-AI_TEXT_MODEL=gemini-3.8-flash
+AI_TEXT_MODEL=gemini-3.5-flash-lite
 AI_EMBEDDING_MODEL=gemini-embedding-001
+AI_GENERATION_TIMEOUT_MS=15000
 AI_DAILY_REQUEST_LIMIT=10
-AI_INPUT_USD_PER_MILLION=0.75
-AI_OUTPUT_USD_PER_MILLION=3.75
+AI_INPUT_USD_PER_MILLION=0.30
+AI_OUTPUT_USD_PER_MILLION=2.50
 ```
 
 Create a Gemini API key in [Google AI Studio](https://aistudio.google.com/app/apikey). Never put it in a `NEXT_PUBLIC_` variable or frontend code. The default daily request limit is 10 per user and can be changed by the backend operator. Redis is required to enforce the limit and serve prompt-cache entries; AI requests fail safely if Redis is unavailable.
 
 `POST /api/ai/magic-add` accepts up to 12,000 characters of meeting notes and returns Zod-validated task drafts. It does not save tasks; the user must review and confirm them through the existing task creation API. A schema-invalid model response is retried once, then returned as a friendly error. Identical normalized prompts are cached per user for 24 hours. Each accepted request, including a cache hit, consumes one daily request. Usage is available at `GET /api/ai/usage`, including input/output tokens, model-call count, cache hits, estimated cost, and average estimated cost per model call.
 
-The estimated cost uses configurable input/output rates (defaulting to the current Gemini 3.8 Flash paid list rates); it is a list-price estimate, not a billing record. Eligible free-tier requests may cost $0 while within Google’s free limits. Model pricing and free-tier availability can change; check [Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing) before reporting a final average. Google’s free tier may use submitted content to improve its products. Use synthetic meeting notes for free-tier testing and do not send confidential work notes unless your provider plan and organization policy allow it.
+The default Gemini 3.5 Flash-Lite model is selected for low-latency extraction and uses minimal thinking. Generation has a 15-second timeout by default, configurable with `AI_GENERATION_TIMEOUT_MS`. The estimated cost uses configurable input/output rates (defaulting to the current Gemini 3.5 Flash-Lite paid list rates); it is a list-price estimate, not a billing record. Eligible free-tier requests may cost $0 while within Google’s free limits. Model pricing and free-tier availability can change; check [Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing) before reporting a final average. Google’s free tier may use submitted content to improve its products. Use synthetic meeting notes for free-tier testing and do not send confidential work notes unless your provider plan and organization policy allow it.
 
 The prompt treats meeting notes as untrusted data, the model has no tools, and task drafts are constrained to a Zod schema. This prevents the generation request from saving or changing tasks. Input length, empty/emoji-only content, authentication, daily quota, and output shape are checked server-side.
 

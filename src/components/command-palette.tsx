@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { FolderKanban, LayoutDashboard, UsersRound } from 'lucide-react'
+import { FolderKanban, LayoutDashboard, Sparkles, UsersRound } from 'lucide-react'
 
 import {
   CommandDialog,
@@ -60,6 +60,10 @@ export function CommandPalette() {
           <CommandItem onSelect={() => navigate('/dashboard#tasks')} value="tasks">
             <span className="flex size-4 items-center justify-center text-xs font-bold">✓</span>
             Tasks
+          </CommandItem>
+          <CommandItem onSelect={() => navigate('/dashboard/magic-add')} value="magic add ai task suggestions">
+            <Sparkles />
+            Magic Add
           </CommandItem>
           <CommandItem onSelect={() => navigate('/dashboard/teams')} value="teams">
             <UsersRound />
