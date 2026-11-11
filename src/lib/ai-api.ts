@@ -113,6 +113,8 @@ async function readMagicAddStream(
   } finally {
     reader.releaseLock()
   }
+}
+
 async function readAiStream(path: string, onText: (chunk: string) => void, signal?: AbortSignal) {
   const token = getAccessToken()
   if (!token) throw new Error('Please sign in to continue.')
