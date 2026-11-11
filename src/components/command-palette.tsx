@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { FolderKanban, LayoutDashboard, Sparkles, UsersRound } from 'lucide-react'
+import { BrainCircuit, FolderKanban, LayoutDashboard, Sparkles, UsersRound } from 'lucide-react'
 
 import {
   CommandDialog,
@@ -72,6 +72,10 @@ export function CommandPalette() {
           <CommandItem onSelect={() => navigate('/dashboard/search')} value="semantic search tasks comments by meaning ai">
             <Sparkles />
             Semantic search
+          </CommandItem>
+          <CommandItem onSelect={() => navigate('/dashboard/ask')} value="ask workspace rag chat task comments citations">
+            <BrainCircuit />
+            Ask workspace
           </CommandItem>
           <CommandItem onSelect={() => navigate('/dashboard/teams')} value="teams">
             <UsersRound />

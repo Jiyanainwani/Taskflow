@@ -37,6 +37,16 @@ type SearchSource = {
   contentHash: string;
 };
 
+export type RetrievedWorkspaceSource = {
+  citationId: string;
+  sourceType: 'task' | 'comment';
+  sourceId: string;
+  taskId: string;
+  title: string;
+  excerpt: string;
+  score: number;
+};
+
 @Injectable()
 export class AiSearchService {
   constructor(
@@ -142,6 +152,58 @@ export class AiSearchService {
       );
       throw new ServiceUnavailableException('Workspace search is temporarily unavailable. Please try again.');
     }
+  }
+
+  async retrieveForAnswer(
+    userId: string,
+    rawQuery: string,
+    limit = 6,
+  ): Promise<RetrievedWorkspaceSource[]> {
+    const query = rawQuery.replace(/\s+/g, ' ').trim();
+    if (!query || query.length > 1800 || !/[\p{L}\p{N}]/u.test(query)) {
+      throw new BadRequestException('Enter a workspace question of 500 characters or fewer.');
+    }
+    if (!this.model.isConfigured()) {
+      throw new ServiceUnavailableException('AI features are not configured. Please ask an administrator.');
+    }
+
+    const sources = await this.getAccessibleSources(userId);
+    if (sources.length === 0) return [];
+
+    await this.syncEmbeddings(sources, userId);
+    const embeddedQuery = await this.model.embedText(query);
+    await this.aiService.recordEmbeddingUsage(userId, embeddedQuery.tokens);
+
+    const documents = await this.searchDocumentModel
+      .find({ sourceKey: { $in: sources.map((source) => source.sourceKey) } })
+      .select('sourceKey embedding')
+      .lean()
+      .exec();
+    const sourceByKey = new Map(sources.map((source) => [source.sourceKey, source]));
+    return documents
+      .map((document) => ({
+        source: sourceByKey.get(document.sourceKey),
+        score: cosineSimilarity(embeddedQuery.embedding, document.embedding),
+      }))
+      .filter((item): item is { source: SearchSource; score: number } => Boolean(item.source))
+      .filter((item) => item.score >= 0.2)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, Math.max(1, Math.min(limit, 8)))
+      .map(({ source, score }, index) => {
+        const taskTitle = source.text.split('\n')[0].replace(/^Task: /, '');
+        const title = source.sourceType === 'task'
+          ? taskTitle
+          : `Comment on ${source.text.split('\n')[0].replace(/^Comment on task: /, '')}`;
+        return {
+          citationId: `S${index + 1}`,
+          sourceType: source.sourceType,
+          sourceId: source.sourceKey.slice(source.sourceKey.indexOf(':') + 1),
+          taskId: source.taskId.toString(),
+          title,
+          excerpt: source.text.slice(0, 1200),
+          score: Number(score.toFixed(4)),
+        };
+      });
   }
 
   private async getAccessibleSources(userId: string): Promise<SearchSource[]> {

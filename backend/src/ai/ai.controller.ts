@@ -23,6 +23,8 @@ import { MagicAddDto } from './dto/magic-add.dto.js';
 import { TasksService } from '../tasks/tasks.service.js';
 import { AiSearchService } from './ai-search.service.js';
 import { SemanticSearchDto } from './dto/semantic-search.dto.js';
+import { WorkspaceRagService } from './workspace-rag.service.js';
+import { AskWorkspaceDto } from './dto/ask-workspace.dto.js';
 
 @ApiTags('AI')
 @ApiBearerAuth()
@@ -33,6 +35,7 @@ export class AiController {
     private readonly aiService: AiService,
     private readonly tasksService: TasksService,
     private readonly aiSearchService: AiSearchService,
+    private readonly workspaceRagService: WorkspaceRagService,
   ) {}
 
   @Post('magic-add')
@@ -121,5 +124,15 @@ export class AiController {
   @ApiResponse({ status: 429, description: 'Daily AI request limit reached' })
   search(@Req() request: Request, @Body() dto: SemanticSearchDto) {
     return this.aiSearchService.search(request.user!.id, dto.query);
+  }
+
+  @Post('ask')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Answer a workspace question with citations to accessible tasks and comments' })
+  @ApiResponse({ status: 200, description: 'Grounded answer and citations' })
+  @ApiResponse({ status: 400, description: 'Question is empty or too long' })
+  @ApiResponse({ status: 429, description: 'Daily AI request limit reached' })
+  askWorkspace(@Req() request: Request, @Body() dto: AskWorkspaceDto) {
+    return this.workspaceRagService.ask(request.user!.id, dto);
   }
 }

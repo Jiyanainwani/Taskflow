@@ -14,7 +14,7 @@ export function DashboardAuthGuard({ children }: { children: React.ReactNode }) 
     // Login already issued a short-lived access token. Use it for this session
     // instead of immediately depending on a cross-site refresh cookie.
     if (hasValidAccessToken()) {
-      setReady(true)
+      queueMicrotask(() => { if (active) setReady(true) })
       return () => { active = false }
     }
 

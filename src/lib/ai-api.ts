@@ -34,6 +34,21 @@ export type SemanticSearchResult = {
   score: number
 }
 
+export type WorkspaceCitation = {
+  id: string
+  type: 'task' | 'comment'
+  sourceId: string
+  taskId: string
+  title: string
+  excerpt: string
+  href: string
+}
+
+export type WorkspaceAnswer = {
+  answer: string
+  citations: WorkspaceCitation[]
+}
+
 export type MagicAddStreamEvent =
   | { type: 'attempt'; attempt: number }
   | { type: 'task'; task: MagicTaskDraft }
@@ -98,8 +113,6 @@ async function readMagicAddStream(
   } finally {
     reader.releaseLock()
   }
-}
-
 async function readAiStream(path: string, onText: (chunk: string) => void, signal?: AbortSignal) {
   const token = getAccessToken()
   if (!token) throw new Error('Please sign in to continue.')
@@ -184,6 +197,13 @@ export const aiApi = {
     }>('/ai/search', {
       method: 'POST',
       body: JSON.stringify({ query }),
+    })
+  },
+
+  askWorkspace(question: string, previousQuestions: string[] = []) {
+    return apiRequest<WorkspaceAnswer>('/ai/ask', {
+      method: 'POST',
+      body: JSON.stringify({ question, previousQuestions }),
     })
   },
 }

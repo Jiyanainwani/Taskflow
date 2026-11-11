@@ -576,6 +576,21 @@ export class AiService {
     }
   }
 
+  async recordTextGenerationUsage(
+    userId: string,
+    inputTokens: number,
+    outputTokens: number,
+  ) {
+    const estimatedCostUsd = this.estimateCost(inputTokens, outputTokens);
+    await this.recordModelUsage(
+      userId,
+      inputTokens,
+      outputTokens,
+      estimatedCostUsd,
+    );
+    return estimatedCostUsd;
+  }
+
   async recordFeatureCacheHit(userId: string) {
     await this.recordCacheHit(userId);
   }
