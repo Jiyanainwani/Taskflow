@@ -25,6 +25,8 @@ import { AiSearchService } from './ai-search.service.js';
 import { SemanticSearchDto } from './dto/semantic-search.dto.js';
 import { WorkspaceRagService } from './workspace-rag.service.js';
 import { AskWorkspaceDto } from './dto/ask-workspace.dto.js';
+import { WorkspaceAssistantService } from './workspace-assistant.service.js';
+import { ConfirmWorkspaceActionDto, WorkspaceAssistantDto } from './dto/workspace-assistant.dto.js';
 
 @ApiTags('AI')
 @ApiBearerAuth()
@@ -36,6 +38,7 @@ export class AiController {
     private readonly tasksService: TasksService,
     private readonly aiSearchService: AiSearchService,
     private readonly workspaceRagService: WorkspaceRagService,
+    private readonly workspaceAssistantService: WorkspaceAssistantService,
   ) {}
 
   @Post('magic-add')
@@ -134,5 +137,24 @@ export class AiController {
   @ApiResponse({ status: 429, description: 'Daily AI request limit reached' })
   askWorkspace(@Req() request: Request, @Body() dto: AskWorkspaceDto) {
     return this.workspaceRagService.ask(request.user!.id, dto);
+  }
+
+  @Post('assistant')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Run the workspace agent and prepare one task change for confirmation' })
+  @ApiResponse({ status: 200, description: 'Assistant answer and optional pending task proposal' })
+  @ApiResponse({ status: 400, description: 'Assistant request is invalid' })
+  @ApiResponse({ status: 429, description: 'Daily AI request limit reached' })
+  runWorkspaceAssistant(@Req() request: Request, @Body() dto: WorkspaceAssistantDto) {
+    return this.workspaceAssistantService.ask(request.user!.id, dto);
+  }
+
+  @Post('assistant/confirm')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Approve or reject a pending task proposal' })
+  @ApiResponse({ status: 200, description: 'Proposal approved, rejected, or task saved' })
+  @ApiResponse({ status: 404, description: 'Proposal is expired or already handled' })
+  confirmWorkspaceAssistantAction(@Req() request: Request, @Body() dto: ConfirmWorkspaceActionDto) {
+    return this.workspaceAssistantService.confirm(request.user!.id, dto);
   }
 }

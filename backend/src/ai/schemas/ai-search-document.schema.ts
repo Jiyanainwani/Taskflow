@@ -8,6 +8,12 @@ export class AiSearchDocument {
   @Prop({ type: String, required: true, unique: true, index: true })
   sourceKey: string;
 
+  @Prop({ type: String, required: true, index: true })
+  baseSourceKey: string;
+
+  @Prop({ type: Number, required: true, min: 0 })
+  chunkIndex: number;
+
   @Prop({ type: String, required: true, enum: ['task', 'comment'], index: true })
   sourceType: 'task' | 'comment';
 
@@ -35,3 +41,4 @@ export class AiSearchDocument {
 
 export const AiSearchDocumentSchema = SchemaFactory.createForClass(AiSearchDocument);
 AiSearchDocumentSchema.index({ taskId: 1, sourceType: 1 });
+AiSearchDocumentSchema.index({ baseSourceKey: 1, chunkIndex: 1 });

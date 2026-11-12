@@ -12,6 +12,7 @@ import { AiSearchService } from './ai-search.service.js';
 import { TaskComment, TaskCommentSchema } from '../tasks/schemas/task-comment.schema.js';
 import { AiSearchDocument, AiSearchDocumentSchema } from './schemas/ai-search-document.schema.js';
 import { WorkspaceRagService } from './workspace-rag.service.js';
+import { WorkspaceAssistantService } from './workspace-assistant.service.js';
 
 @Module({
   imports: [
@@ -29,6 +30,6 @@ import { WorkspaceRagService } from './workspace-rag.service.js';
     }),
   ],
   controllers: [AiController],
-  providers: [AiService, AiSearchService, WorkspaceRagService, GeminiAiModel, AccessTokenGuard],
+  providers: [AiService, AiSearchService, WorkspaceRagService, WorkspaceAssistantService, GeminiAiModel, AccessTokenGuard],
 })
 export class AiModule {}

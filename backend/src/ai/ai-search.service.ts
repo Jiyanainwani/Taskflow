@@ -21,6 +21,7 @@ import {
 } from './schemas/ai-search-document.schema.js';
 import { AiService } from './ai.service.js';
 import { GeminiAiModel } from './gemini-ai-model.js';
+import { chunkWorkspaceText, rerankCandidates } from './workspace-retrieval.js';
 
 const MAX_TASKS = 100;
 const MAX_COMMENTS = 100;
@@ -34,6 +35,13 @@ type SearchSource = {
   ownerId: Types.ObjectId;
   teamId: Types.ObjectId | null;
   text: string;
+  contentHash: string;
+};
+
+type IndexedSourceChunk = Omit<SearchSource, 'sourceKey' | 'contentHash'> & {
+  sourceKey: string;
+  baseSourceKey: string;
+  chunkIndex: number;
   contentHash: string;
 };
 
@@ -77,12 +85,13 @@ export class AiSearchService {
     const startedAt = Date.now();
     try {
       const sources = await this.getAccessibleSources(userId);
-      const indexed = await this.syncEmbeddings(sources, userId);
+      const chunks = this.chunkSources(sources);
+      const indexed = await this.syncEmbeddings(chunks, userId);
       const snapshotHash = createHash('sha256')
         .update(sources.map((source) => `${source.sourceKey}:${source.contentHash}`).join('|'))
         .digest('hex');
       const queryHash = createHash('sha256').update(query.toLowerCase()).digest('hex');
-      const cacheKey = `taskflow:ai:v1:semantic-search:${userId}:${snapshotHash}:${queryHash}`;
+      const cacheKey = `taskflow:ai:v2:semantic-search:${userId}:${snapshotHash}:${queryHash}`;
 
       try {
         const cached = await this.redis.get(cacheKey);
@@ -96,26 +105,39 @@ export class AiSearchService {
 
       const embeddedQuery = await this.model.embedText(query);
       const documents = await this.searchDocumentModel
-        .find({ sourceKey: { $in: sources.map((source) => source.sourceKey) } })
-        .select('sourceKey sourceType taskId text embedding')
+        .find({ sourceKey: { $in: chunks.map((source) => source.sourceKey) } })
+        .select('sourceKey baseSourceKey sourceType taskId text embedding')
         .lean()
         .exec();
 
       const sourceByKey = new Map(sources.map((source) => [source.sourceKey, source]));
-      const results: SearchResult[] = documents
+      const chunkByKey = new Map(chunks.map((source) => [source.sourceKey, source]));
+      const candidates = documents
         .map((document) => ({
-          source: sourceByKey.get(document.sourceKey),
-          score: cosineSimilarity(embeddedQuery.embedding, document.embedding),
+          source: sourceByKey.get(document.baseSourceKey),
+          chunk: chunkByKey.get(document.sourceKey),
+          vectorScore: cosineSimilarity(embeddedQuery.embedding, document.embedding),
         }))
-        .filter((item): item is { source: SearchSource; score: number } => Boolean(item.source))
-        .filter((item) => item.score >= 0.2)
-        .sort((left, right) => right.score - left.score)
+        .filter((item): item is { source: SearchSource; chunk: IndexedSourceChunk; vectorScore: number } => Boolean(item.source && item.chunk))
+        .filter((item) => item.vectorScore >= 0.15);
+      const reranked = rerankCandidates(query, candidates.map((item) => ({
+        value: item,
+        text: item.chunk.text,
+        vectorScore: item.vectorScore,
+      })));
+      const seenSources = new Set<string>();
+      const results: SearchResult[] = reranked
+        .filter(({ value }) => {
+          if (seenSources.has(value.source.sourceKey)) return false;
+          seenSources.add(value.source.sourceKey);
+          return true;
+        })
         .slice(0, 10)
-        .map(({ source, score }) => ({
-          taskId: source.taskId.toString(),
-          type: source.sourceType,
-          title: source.sourceType === 'task' ? source.text.split('\n')[0].replace(/^Task: /, '') : `Comment on ${source.text.split('\n')[0].replace(/^Comment on task: /, '')}`,
-          snippet: source.text.slice(0, 280),
+        .map(({ value, score }) => ({
+          taskId: value.source.taskId.toString(),
+          type: value.source.sourceType,
+          title: this.sourceTitle(value.source),
+          snippet: value.chunk.text.slice(0, 280),
           score: Number(score.toFixed(4)),
         }));
 
@@ -160,7 +182,7 @@ export class AiSearchService {
     limit = 6,
   ): Promise<RetrievedWorkspaceSource[]> {
     const query = rawQuery.replace(/\s+/g, ' ').trim();
-    if (!query || query.length > 1800 || !/[\p{L}\p{N}]/u.test(query)) {
+    if (!query || query.length > 2000 || !/[\p{L}\p{N}]/u.test(query)) {
       throw new BadRequestException('Enter a workspace question of 500 characters or fewer.');
     }
     if (!this.model.isConfigured()) {
@@ -169,41 +191,49 @@ export class AiSearchService {
 
     const sources = await this.getAccessibleSources(userId);
     if (sources.length === 0) return [];
+    const chunks = this.chunkSources(sources);
 
-    await this.syncEmbeddings(sources, userId);
+    await this.syncEmbeddings(chunks, userId);
     const embeddedQuery = await this.model.embedText(query);
     await this.aiService.recordEmbeddingUsage(userId, embeddedQuery.tokens);
 
     const documents = await this.searchDocumentModel
-      .find({ sourceKey: { $in: sources.map((source) => source.sourceKey) } })
-      .select('sourceKey embedding')
+      .find({ sourceKey: { $in: chunks.map((source) => source.sourceKey) } })
+      .select('sourceKey baseSourceKey text embedding')
       .lean()
       .exec();
     const sourceByKey = new Map(sources.map((source) => [source.sourceKey, source]));
-    return documents
+    const chunkByKey = new Map(chunks.map((source) => [source.sourceKey, source]));
+    const candidates = documents
       .map((document) => ({
-        source: sourceByKey.get(document.sourceKey),
-        score: cosineSimilarity(embeddedQuery.embedding, document.embedding),
+        source: sourceByKey.get(document.baseSourceKey),
+        chunk: chunkByKey.get(document.sourceKey),
+        vectorScore: cosineSimilarity(embeddedQuery.embedding, document.embedding),
       }))
-      .filter((item): item is { source: SearchSource; score: number } => Boolean(item.source))
-      .filter((item) => item.score >= 0.2)
-      .sort((left, right) => right.score - left.score)
+      .filter((item): item is { source: SearchSource; chunk: IndexedSourceChunk; vectorScore: number } => Boolean(item.source && item.chunk))
+      .filter((item) => item.vectorScore >= 0.15);
+    const reranked = rerankCandidates(query, candidates.map((item) => ({
+      value: item,
+      text: item.chunk.text,
+      vectorScore: item.vectorScore,
+    })));
+    const seenSources = new Set<string>();
+    return reranked
+      .filter(({ value }) => {
+        if (seenSources.has(value.source.sourceKey)) return false;
+        seenSources.add(value.source.sourceKey);
+        return true;
+      })
       .slice(0, Math.max(1, Math.min(limit, 8)))
-      .map(({ source, score }, index) => {
-        const taskTitle = source.text.split('\n')[0].replace(/^Task: /, '');
-        const title = source.sourceType === 'task'
-          ? taskTitle
-          : `Comment on ${source.text.split('\n')[0].replace(/^Comment on task: /, '')}`;
-        return {
-          citationId: `S${index + 1}`,
-          sourceType: source.sourceType,
-          sourceId: source.sourceKey.slice(source.sourceKey.indexOf(':') + 1),
-          taskId: source.taskId.toString(),
-          title,
-          excerpt: source.text.slice(0, 1200),
-          score: Number(score.toFixed(4)),
-        };
-      });
+      .map(({ value, score }, index) => ({
+        citationId: `S${index + 1}`,
+        sourceType: value.source.sourceType,
+        sourceId: value.source.sourceKey.slice(value.source.sourceKey.indexOf(':') + 1),
+        taskId: value.source.taskId.toString(),
+        title: this.sourceTitle(value.source),
+        excerpt: value.chunk.text.slice(0, 1200),
+        score: Number(score.toFixed(4)),
+      }));
   }
 
   private async getAccessibleSources(userId: string): Promise<SearchSource[]> {
@@ -282,7 +312,26 @@ export class AiSearchService {
     };
   }
 
-  private async syncEmbeddings(sources: SearchSource[], userId: string) {
+  private chunkSources(sources: SearchSource[]): IndexedSourceChunk[] {
+    const modelId = this.config.get<string>('AI_EMBEDDING_MODEL') ?? 'gemini-embedding-001';
+    return sources.flatMap((source) => chunkWorkspaceText(source.text).map((text, chunkIndex) => ({
+      ...source,
+      sourceKey: `${source.sourceKey}#${chunkIndex}`,
+      baseSourceKey: source.sourceKey,
+      chunkIndex,
+      text,
+      contentHash: createHash('sha256').update(`${modelId}:${text}`).digest('hex'),
+    })));
+  }
+
+  private sourceTitle(source: SearchSource) {
+    const title = source.text.split('\n')[0];
+    return source.sourceType === 'task'
+      ? title.replace(/^Task: /, '')
+      : `Comment on ${title.replace(/^Comment on task: /, '')}`;
+  }
+
+  private async syncEmbeddings(sources: IndexedSourceChunk[], userId: string) {
     if (sources.length === 0) return { count: 0, tokens: 0 };
     const records = await this.searchDocumentModel
       .find({ sourceKey: { $in: sources.map((source) => source.sourceKey) } })
@@ -291,6 +340,11 @@ export class AiSearchService {
       .exec();
     const hashes = new Map(records.map((record) => [record.sourceKey, record.contentHash]));
     const changed = sources.filter((source) => hashes.get(source.sourceKey) !== source.contentHash);
+    const activeSourceKeys = sources.map((source) => source.sourceKey);
+    await this.searchDocumentModel.deleteMany({
+      baseSourceKey: { $in: [...new Set(sources.map((source) => source.baseSourceKey))] },
+      sourceKey: { $nin: activeSourceKeys },
+    });
     if (changed.length === 0) return { count: 0, tokens: 0 };
 
     const result = await this.model.embedDocuments(changed.map((source) => source.text));

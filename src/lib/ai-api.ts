@@ -49,6 +49,28 @@ export type WorkspaceAnswer = {
   citations: WorkspaceCitation[]
 }
 
+export type AssistantTaskFields = {
+  title: string
+  description?: string
+  status?: 'todo' | 'in-progress' | 'done'
+  priority?: 'low' | 'medium' | 'high'
+  dueDate?: string
+  teamId?: string
+}
+
+export type WorkspaceAssistantAction =
+  | { type: 'create_task'; input: AssistantTaskFields }
+  | { type: 'update_task'; input: Partial<AssistantTaskFields> & { taskId: string } }
+
+export type WorkspaceAssistantResult = {
+  answer: string
+  pendingAction: {
+    approvalId: string
+    action: WorkspaceAssistantAction
+    expiresInSeconds: number
+  } | null
+}
+
 export type MagicAddStreamEvent =
   | { type: 'attempt'; attempt: number }
   | { type: 'task'; task: MagicTaskDraft }
@@ -206,6 +228,24 @@ export const aiApi = {
     return apiRequest<WorkspaceAnswer>('/ai/ask', {
       method: 'POST',
       body: JSON.stringify({ question, previousQuestions }),
+    })
+  },
+
+  runWorkspaceAssistant(question: string) {
+    return apiRequest<WorkspaceAssistantResult>('/ai/assistant', {
+      method: 'POST',
+      body: JSON.stringify({ question }),
+    })
+  },
+
+  confirmWorkspaceAssistantAction(approvalId: string, approved: boolean) {
+    return apiRequest<{
+      approved: boolean
+      message: string
+      task?: { id: string; title: string; status: string; priority: string }
+    }>('/ai/assistant/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ approvalId, approved }),
     })
   },
 }

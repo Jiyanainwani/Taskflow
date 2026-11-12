@@ -89,6 +89,12 @@ jobs:
       - name: Run unit tests
         run: npm test --prefix backend
 
+      - name: Evaluate workspace retrieval golden set
+        run: npm run eval:workspace-retrieval --prefix backend
+
+      - name: Verify MCP tools from an external protocol client
+        run: npm run mcp:smoke --prefix backend
+
       - name: Run backend e2e tests
         run: npm run test:e2e --prefix backend
 

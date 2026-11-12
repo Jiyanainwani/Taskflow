@@ -114,7 +114,7 @@ The prompt treats meeting notes as untrusted data, the model has no tools, and t
 
 `POST /api/ai/digest` streams a standup-style digest over up to the 100 most recently created tasks the user can access. `POST /api/ai/tasks/:taskId/summary` streams a summary for one accessible task. Both are read-only, use the same per-user daily quota, cache identical task snapshots in Redis for 24 hours, and log token usage, estimated cost, and duration without logging task text. The UI is under **Daily digest** in the dashboard sidebar. The browser can cancel a stream; that cancellation is forwarded to the model request.
 
-`POST /api/ai/search` accepts `{ "query": "work blocked waiting for QA" }` and ranks matching tasks and comments using Gemini embeddings and cosine similarity. Embeddings are stored in MongoDB in the `aisearchdocuments` collection; only source IDs currently returned by the authenticated task access query are searched, so team role changes are honored dynamically. For this small deployment, it indexes up to 100 recent accessible tasks and 100 comments, then ranks those stored vectors in the API process. It does not require an Atlas Vector Search index or an extra vector database. Embeddings are refreshed when indexed content changes, and identical searches over the same snapshot are cached in Redis for 10 minutes. `AI_EMBEDDING_USD_PER_MILLION` defaults to the Gemini Embedding paid list rate; Google AI Studio may provide free-tier requests, depending on current availability. Check [Google's current pricing and data terms](https://ai.google.dev/gemini-api/docs/pricing) before presenting a cost estimate.
+`POST /api/ai/search` accepts `{ "query": "work blocked waiting for QA" }` and ranks matching tasks and comments using Gemini embeddings and a hybrid reranker. Accessible task and comment records are split into overlapping 900-character chunks with 120-character overlap. Embeddings are stored in MongoDB in the `aisearchdocuments` collection; only source IDs returned by the authenticated task access query are searched, so team role changes are honored dynamically. For this small deployment, it indexes up to 100 recent accessible tasks and 100 comments, then combines cosine similarity with lexical term coverage (`75%` vector score, `25%` lexical score) in the API process. It does not require an Atlas Vector Search index or an extra vector database. Embeddings are refreshed when indexed content changes, and identical searches over the same snapshot are cached in Redis for 10 minutes. `AI_EMBEDDING_USD_PER_MILLION` defaults to the Gemini Embedding paid list rate; Google AI Studio may provide free-tier requests, depending on current availability. Check [Google's current pricing and data terms](https://ai.google.dev/gemini-api/docs/pricing) before presenting a cost estimate.
 
 Magic Add boundary tests cover the five requested hostile input types:
 
@@ -131,6 +131,22 @@ The targeted service suite verifies these boundaries. For a mentor demo, also tr
 `POST /api/ai/ask` accepts `{ "question": "What is blocked waiting for QA?" }` and returns a grounded answer with citations. Retrieval uses the same access-controlled task and comment corpus as semantic search; citations are checked against the retrieved source IDs before returning and link to the specific task or comment. The model receives retrieved text as untrusted context, has no tools, and cannot make task changes. If no relevant source is found, the API returns a no-evidence response instead of asking the model to guess. This read-only endpoint consumes one per-user AI request and logs embedding and text-generation token/cost usage.
 
 The **Ask workspace** page is linked from the dashboard sidebar. Citation links open the accessible task and, for comment sources, scroll to that comment. If access is revoked or an item is deleted, the task detail page shows an unavailable state.
+
+### Workspace assistant with approval
+
+`POST /api/ai/assistant` runs a bounded agent loop with `list_tasks`, `create_task`, and `update_task` tools. The list tool reads only tasks visible to the signed-in user. Create and update tools prepare a proposal; they do not write. The API stores the proposed action in Redis under the current user with a 10-minute expiry and returns an opaque approval ID. `POST /api/ai/assistant/confirm` consumes that approval once and writes only when the user confirms. The dashboard exposes this flow at **Task assistant**. The API rechecks task/team permissions when applying an approved change.
+
+### Model Context Protocol server
+
+The standalone stdio MCP server exposes `list_tasks` and `create_task` through the official TypeScript SDK. Set `TASKFLOW_API_URL` (default `http://127.0.0.1:3001/api`) and `TASKFLOW_ACCESS_TOKEN` in the external MCP client's server environment. The access token is sent only to the local MCP process and should be refreshed when it expires. `create_task` requires `confirm: true`; without it, the server rejects the call without contacting the task-creation endpoint.
+
+Run the server with `npm run mcp` from `backend/`. Run `npm run mcp:smoke` to connect an MCP client over stdio, list both tools, and verify that an unconfirmed write is rejected.
+
+### Retrieval eval
+
+The 20-question golden set lives in `backend/evals/workspace-retrieval-goldens.ts`. The deterministic reranker regression eval requires at least 80% Hit@5 and runs in CI as `npm run eval:workspace-retrieval`. It uses fixed vector scores so the CI check is repeatable and does not call Gemini; it guards chunk/rerank selection behavior, while live embedding quality should also be checked during the demo. Workspace RAG and assistant requests log input/output tokens, estimated cost, retrieved source counts where applicable, and duration.
+
+The capstone architecture and trade-offs are in [`docs/ai-workspace-architecture.md`](../docs/ai-workspace-architecture.md). The retro is a draft in [`docs/capstone-retro.md`](../docs/capstone-retro.md).
 
 Magic Add boundary tests cover the five requested hostile input types:
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { BrainCircuit, FolderKanban, LayoutDashboard, Sparkles, UsersRound } from 'lucide-react'
+import { BrainCircuit, Bot, FolderKanban, LayoutDashboard, Sparkles, UsersRound } from 'lucide-react'
 
 import {
   CommandDialog,
@@ -76,6 +76,10 @@ export function CommandPalette() {
           <CommandItem onSelect={() => navigate('/dashboard/ask')} value="ask workspace rag chat task comments citations">
             <BrainCircuit />
             Ask workspace
+          </CommandItem>
+          <CommandItem onSelect={() => navigate('/dashboard/assistant')} value="task assistant create update confirm approval">
+            <Bot />
+            Task assistant
           </CommandItem>
           <CommandItem onSelect={() => navigate('/dashboard/teams')} value="teams">
             <UsersRound />
