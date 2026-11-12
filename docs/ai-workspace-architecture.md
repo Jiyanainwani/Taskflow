@@ -16,7 +16,7 @@ flowchart LR
   Write[TasksService write and permission checks]
   MCPClient[External MCP client]
   MCP[TaskFlow stdio MCP server]
-  CI[CI retrieval eval and MCP client smoke]
+  CI[CI offline and optional Gemini eval plus MCP smoke]
 
   Browser -->|JWT: ask question| API
   API --> Tasks
@@ -39,6 +39,7 @@ flowchart LR
   MCPClient <-->|stdio JSON-RPC| MCP
   MCP -->|JWT-authenticated API calls| API
   CI --> Retrieve
+  CI -. when provider key is configured .-> Embed
   CI --> MCP
 ```
 
@@ -58,11 +59,11 @@ The stdio MCP server is a separate external-client entry point. `list_tasks` use
 
 ## Evaluation and observability
 
-The CI gate uses 20 golden questions, expected source IDs, and a minimum Hit@5 of 80%. Fixed vector scores keep the reranker regression test deterministic and offline; it does not measure Gemini embedding quality. Live demo checks should record real source hits, false positives, latency, and token cost. Request logs record duration and token/cost metrics without logging task text.
+The CI gate always runs a deterministic 20-question reranker regression at an 80% Hit@5 threshold. When `GOOGLE_GENERATIVE_AI_API_KEY` is configured as a GitHub Actions secret, CI also embeds the golden questions and expected documents with Gemini, runs the production hybrid reranker, and enforces the same threshold. The live check reports embedding model, token usage, estimated cost, and latency. The golden documents are synthetic fixtures, so they exercise model-backed semantic matching without using private workspace data. Request logs record duration and token/cost metrics without logging task text.
 
 ## Trade-offs and next steps
 
 - The source cap bounds cost and latency but can omit older relevant tasks. Add a configurable time window or paged retrieval if real workspaces outgrow the cap.
 - The lexical reranker is cheap and explainable; it does not learn from feedback. Compare it with a cross-encoder or provider reranker using a larger judged set before adding cost.
 - MCP uses a local stdio process and an access token supplied by the external client. A future hosted MCP transport should use OAuth rather than long-lived static tokens.
-- The CI goldens protect deterministic retrieval code. Add a small, permission-safe live evaluation corpus when representative task data is available.
+- The synthetic goldens exercise Gemini model quality without private data. Add a permission-safe set of real task/comment examples if the team can approve one for evaluation.

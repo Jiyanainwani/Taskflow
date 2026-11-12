@@ -144,9 +144,9 @@ Run the server with `npm run mcp` from `backend/`. Run `npm run mcp:smoke` to co
 
 ### Retrieval eval
 
-The 20-question golden set lives in `backend/evals/workspace-retrieval-goldens.ts`. The deterministic reranker regression eval requires at least 80% Hit@5 and runs in CI as `npm run eval:workspace-retrieval`. It uses fixed vector scores so the CI check is repeatable and does not call Gemini; it guards chunk/rerank selection behavior, while live embedding quality should also be checked during the demo. Workspace RAG and assistant requests log input/output tokens, estimated cost, retrieved source counts where applicable, and duration.
+The 20-question golden set lives in `backend/evals/workspace-retrieval-goldens.ts`. CI always runs the deterministic reranker regression eval with an 80% Hit@5 threshold (`npm run eval:workspace-retrieval`). It also runs the live Gemini embedding eval when the `GOOGLE_GENERATIVE_AI_API_KEY` GitHub Actions secret is configured (`npm run eval:workspace-retrieval:gemini` locally). The live check embeds the questions as `RETRIEVAL_QUERY` and expected documents as `RETRIEVAL_DOCUMENT`, applies the same hybrid reranker, and reports Hit@5, token usage, estimated cost, model, and latency. Its threshold defaults to 80%; override with `WORKSPACE_RETRIEVAL_MIN_HIT_RATE`. The deterministic check protects offline CI when no provider key is available; the live check measures embedding quality when credentials are configured. Workspace RAG and assistant requests also log input/output tokens, estimated cost, retrieved source counts where applicable, and duration.
 
-The capstone architecture and trade-offs are in [`docs/ai-workspace-architecture.md`](../docs/ai-workspace-architecture.md). The retro is a draft in [`docs/capstone-retro.md`](../docs/capstone-retro.md).
+The capstone architecture and trade-offs are in [`docs/ai-workspace-architecture.md`](../docs/ai-workspace-architecture.md). The 10-minute team presentation runbook is in [`docs/capstone-demo-runbook.md`](../docs/capstone-demo-runbook.md), and the retro is a draft in [`docs/capstone-retro.md`](../docs/capstone-retro.md).
 
 Magic Add boundary tests cover the five requested hostile input types:
 
