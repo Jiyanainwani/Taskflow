@@ -2,6 +2,7 @@ import { createGoogle } from '@ai-sdk/google';
 import { cosineSimilarity, embedMany } from 'ai';
 
 import { rerankCandidates } from '../src/ai/workspace-retrieval.js';
+import { estimateTextTokens } from '../src/ai/token-estimate.js';
 import { workspaceRetrievalGoldens } from '../evals/workspace-retrieval-goldens.js';
 
 const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim();
@@ -54,7 +55,14 @@ const hits = workspaceRetrievalGoldens.filter((golden, queryIndex) => {
 const queryCount = workspaceRetrievalGoldens.length;
 const hitRate = hits / queryCount;
 const requiredHitRate = Number(process.env.WORKSPACE_RETRIEVAL_MIN_HIT_RATE ?? 0.8);
-const totalTokens = documentEmbeddings.usage.tokens + queryEmbeddings.usage.tokens;
+const providerTokens = documentEmbeddings.usage?.tokens + queryEmbeddings.usage?.tokens;
+const hasProviderTokenUsage = Number.isFinite(providerTokens);
+const totalTokens = hasProviderTokenUsage
+  ? providerTokens
+  : estimateTextTokens([
+      ...workspaceRetrievalGoldens.map(({ text }) => text),
+      ...workspaceRetrievalGoldens.map(({ question }) => question),
+    ]);
 const estimatedCost = (totalTokens * embeddingRate) / 1_000_000;
 const durationMs = Math.round(performance.now() - startedAt);
 
@@ -62,7 +70,7 @@ console.log(
   `Gemini workspace retrieval Hit@5: ${hits}/${queryCount} (${(hitRate * 100).toFixed(1)}%). Required: ${(requiredHitRate * 100).toFixed(0)}%.`,
 );
 console.log(
-  `Model: ${modelId}; embedding tokens: ${totalTokens}; estimated cost: $${estimatedCost.toFixed(6)}; latency: ${durationMs} ms.`,
+  `Model: ${modelId}; ${hasProviderTokenUsage ? 'provider' : 'estimated'} embedding tokens: ${totalTokens}; estimated cost: $${estimatedCost.toFixed(6)}; latency: ${durationMs} ms.`,
 );
 
 if (hitRate < requiredHitRate) process.exitCode = 1;

@@ -25,6 +25,7 @@ import {
   type ListAssistantTasks,
   type WorkspaceAssistantAction,
 } from './schemas/workspace-assistant.schema.js';
+import { estimateTextTokens } from './token-estimate.js';
 
 export class InvalidMagicOutputError extends Error {
   constructor() {
@@ -332,7 +333,12 @@ export class GeminiAiModel {
       ),
       providerOptions: { google: { outputDimensionality: 768, taskType: 'RETRIEVAL_QUERY' } },
     });
-    return { embedding: result.embedding, tokens: result.usage.tokens };
+    return {
+      embedding: result.embedding,
+      tokens: Number.isFinite(result.usage?.tokens)
+        ? result.usage.tokens
+        : estimateTextTokens([value]),
+    };
   }
 
   async embedDocuments(values: string[]) {
@@ -354,6 +360,11 @@ export class GeminiAiModel {
       ),
       providerOptions: { google: { outputDimensionality: 768, taskType: 'RETRIEVAL_DOCUMENT' } },
     });
-    return { embeddings: result.embeddings, tokens: result.usage.tokens };
+    return {
+      embeddings: result.embeddings,
+      tokens: Number.isFinite(result.usage?.tokens)
+        ? result.usage.tokens
+        : estimateTextTokens(values),
+    };
   }
 }
